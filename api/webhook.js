@@ -1,6 +1,5 @@
 // api/webhook.js
 // Telegram sends every incoming message to this URL as a POST request.
-// No verification handshake needed (unlike WhatsApp) — just set the webhook once and go.
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -16,13 +15,11 @@ export default async function handler(req, res) {
     const userText = message?.text || "";
 
     if (!chatId) {
-      return res.status(200).send("ok"); // ignore non-message updates
+      return res.status(200).send("ok");
     }
 
-    // Respond to Telegram immediately, do the work after
     res.status(200).send("ok");
 
-    // Handle /start separately with a friendly intro
     if (userText.trim() === "/start") {
       await sendTelegramMessage(
         chatId,
@@ -37,12 +34,17 @@ export default async function handler(req, res) {
     const replyText = await generateRoast(userText);
     await sendTelegramMessage(chatId, replyText);
   } catch (err) {
-    console.error("Webhook error:", err);
+    console.error("Webhook error:", err?.message || err);
     if (!res.headersSent) res.status(200).send("ok");
   }
 }
 
 async function generateRoast(userText) {
+  if (!GROQ_API_KEY) {
+    console.error("Missing GROQ_API_KEY env var");
+    return "My key don spoil, master needs to fix am 😅";
+  }
+
   const systemPrompt = `You are a savage, funny Nigerian roast bot that texts in a mix of English and pidgin.
 Rules:
 - Keep replies under 3 sentences, punchy, chat-message length.
@@ -52,48 +54,63 @@ Rules:
 - Default to a roast if the intent is unclear.
 - Use Nigerian slang naturally (abeg, wahala, jare, na you, etc) but keep it readable.`;
 
-  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${GROQ_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: "openai/gpt-oss-20b",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userText || "roast me" },
-      ],
-      max_tokens: 150,
-      temperature: 1.0,
-    }),
-  });
+  try {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${GROQ_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "openai/gpt-oss-20b",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userText || "roast me" },
+        ],
+        max_tokens: 200,
+        temperature: 1.0,
+      }),
+    });
 
-  const data = await response.json();
+    const data = await response.json();
 
-  if (!response.ok) {
-    console.error("Groq error:", data);
-    return "My brain don hang small, try again abeg 😅";
+    if (!response.ok) {
+      console.error("Groq error:", JSON.stringify(data));
+      return "My brain don hang small, try again abeg 😅";
+    }
+
+    const text = data.choices?.[0]?.message?.content?.trim();
+    return text || "Network dey do wahala, try again.";
+  } catch (err) {
+    console.error("Groq fetch failed:", err?.message || err);
+    return "Groq no dey respond, try again in small time.";
   }
-
-  return data.choices?.[0]?.message?.content?.trim() || "Network dey do wahala, try again.";
 }
 
 async function sendTelegramMessage(chatId, text) {
+  if (!TELEGRAM_BOT_TOKEN) {
+    console.error("Missing TELEGRAM_BOT_TOKEN env var");
+    return;
+  }
+
   const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text: text,
-    }),
-  });
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: text,
+      }),
+    });
 
-  const data = await response.json();
-  if (!data.ok) {
-    console.error("Telegram send error:", data);
+    const data = await response.json();
+    if (!data.ok) {
+      console.error("Telegram send error:", JSON.stringify(data));
+    }
+    return data;
+  } catch (err) {
+    console.error("Telegram fetch failed:", err?.message || err);
   }
-  return data;
 }
