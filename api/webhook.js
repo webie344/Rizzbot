@@ -54,36 +54,46 @@ Rules:
 - Default to a roast if the intent is unclear.
 - Use Nigerian slang naturally (abeg, wahala, jare, na you, etc) but keep it readable.`;
 
-  try {
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${GROQ_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "openai/gpt-oss-20b",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userText || "roast me" },
-        ],
-        max_tokens: 200,
-        temperature: 1.0,
-      }),
-    });
+  const body = JSON.stringify({
+    model: "openai/gpt-oss-20b",
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userText || "roast me" },
+    ],
+    max_tokens: 200,
+    temperature: 1.0,
+  });
 
-    const data = await response.json();
+  // Try up to 2 times — Vercel's serverless functions occasionally hit a
+  // cold-start network blip on the first outbound fetch, a retry fixes it.
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${GROQ_API_KEY}`,
+        },
+        body,
+      });
 
-    if (!response.ok) {
-      console.error("Groq error:", JSON.stringify(data));
-      return "My brain don hang small, try again abeg 😅";
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error("Groq error:", JSON.stringify(data));
+        return "My brain don hang small, try again abeg 😅";
+      }
+
+      const text = data.choices?.[0]?.message?.content?.trim();
+      return text || "Network dey do wahala, try again.";
+    } catch (err) {
+      console.error(`Groq fetch failed (attempt ${attempt}):`, err?.message || err);
+      if (attempt === 2) {
+        return "Groq no dey respond, try again in small time.";
+      }
+      // small pause before retrying
+      await new Promise((r) => setTimeout(r, 300));
     }
-
-    const text = data.choices?.[0]?.message?.content?.trim();
-    return text || "Network dey do wahala, try again.";
-  } catch (err) {
-    console.error("Groq fetch failed:", err?.message || err);
-    return "Groq no dey respond, try again in small time.";
   }
 }
 
