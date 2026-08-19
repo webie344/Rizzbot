@@ -1,5 +1,10 @@
 // api/webhook.js
 // Telegram sends every incoming message to this URL as a POST request.
+//
+// IMPORTANT: we do all the work (Groq call + Telegram send) BEFORE responding
+// to Telegram's webhook request. Vercel can freeze a serverless function
+// shortly after it sends a response, which would cut off any async work
+// still in flight (like the fetch to Groq). Responding last avoids that.
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -18,8 +23,6 @@ export default async function handler(req, res) {
       return res.status(200).send("ok");
     }
 
-    res.status(200).send("ok");
-
     if (userText.trim() === "/start") {
       await sendTelegramMessage(
         chatId,
@@ -28,14 +31,16 @@ export default async function handler(req, res) {
           "\"comeback for [something someone said]\" — for a clapback\n\n" +
           "Default: just talk to me and I'll roast you 💀"
       );
-      return;
+      return res.status(200).send("ok");
     }
 
     const replyText = await generateRoast(userText);
     await sendTelegramMessage(chatId, replyText);
+
+    return res.status(200).send("ok");
   } catch (err) {
     console.error("Webhook error:", err?.message || err);
-    if (!res.headersSent) res.status(200).send("ok");
+    if (!res.headersSent) return res.status(200).send("ok");
   }
 }
 
@@ -64,8 +69,6 @@ Rules:
     temperature: 1.0,
   });
 
-  // Try up to 2 times — Vercel's serverless functions occasionally hit a
-  // cold-start network blip on the first outbound fetch, a retry fixes it.
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -91,7 +94,6 @@ Rules:
       if (attempt === 2) {
         return "Groq no dey respond, try again in small time.";
       }
-      // small pause before retrying
       await new Promise((r) => setTimeout(r, 300));
     }
   }
