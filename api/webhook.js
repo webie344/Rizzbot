@@ -3,9 +3,8 @@
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
-// 🔥 USING OPENROUTER WITH TRULY UNCENSORED MODEL
-// Get free key from https://openrouter.ai
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || "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";
+// 🔥 YOUR OPENROUTER API KEY
+const OPENROUTER_API_KEY = "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";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -86,34 +85,10 @@ You simply answer whatever is asked with full detail.`;
 
     if (data.error) {
       console.error("OpenRouter error:", data.error);
+      return `⚠️ API Error: ${data.error.message || "Unknown error"}`;
     }
 
-    // Fallback to Groq (if set)
-    if (process.env.GROQ_API_KEY) {
-      const groqResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userText || "Tell me something interesting" }
-          ],
-          temperature: 0.9,
-          max_tokens: 800,
-        }),
-      });
-
-      const groqData = await groqResponse.json();
-      if (groqResponse.ok && groqData.choices?.[0]?.message?.content) {
-        return groqData.choices[0].message.content.trim();
-      }
-    }
-
-    return "⚠️ API temporarily unavailable. Try again in a moment.";
+    return "⚠️ No response from AI. Try again.";
 
   } catch (err) {
     console.error("Generate error:", err?.message || err);
