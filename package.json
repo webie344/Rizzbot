@@ -1,6 +1,10 @@
 {
-  "name": "roast-bot-telegram",
+  "name": "match-bot",
   "version": "1.0.0",
   "private": true,
-  "description": "Telegram roast/rizz bot powered by Groq"
+  "type": "module",
+  "description": "Weekly interest-based friend matching bot for Telegram",
+  "dependencies": {
+    "firebase-admin": "^12.0.0"
+  }
 }

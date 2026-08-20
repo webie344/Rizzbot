@@ -1,80 +1,108 @@
-# Telegram Roast Bot — Setup Guide
+# Weekly Match Bot — Setup Guide
 
-Way simpler than WhatsApp. No business verification, no tester limits, no review process.
-You can be live in under 10 minutes.
-
----
-
-## PART 1: Create the bot (2 min)
-
-1. Open Telegram, search for **@BotFather** (the official bot for making bots).
-2. Send `/newbot`.
-3. Give it a name (e.g. "Roast Bot") — this is the display name.
-4. Give it a username ending in `bot` (e.g. `naija_roast_bot`) — this becomes your shareable link.
-5. BotFather replies with an **API token** — copy it. Looks like `123456789:ABCdefGhIJKlmNoPQRsTUVwxyz`.
-
-Your bot's shareable link is now: `https://t.me/naija_roast_bot` (whatever username you picked).
+Same pattern as the roast bot, plus one new piece: **Firestore**, so the bot
+can remember who's answered what and pair people up weekly.
 
 ---
 
-## PART 2: Get a Groq API key (2 min)
+## PART 1: Telegram bot (same as before)
 
-1. https://console.groq.com → sign up → **API Keys** → create one → copy it.
-(Skip if you already have one from before.)
+If this is a brand new bot, repeat what you did for the roast bot:
+1. Message @BotFather → `/newbot` → get your token
+(If you're reusing the same bot, skip this — just redeploy new code to it.)
 
 ---
 
-## PART 3: Deploy to Vercel (5 min)
+## PART 2: Firebase setup (new step)
 
-1. Take the `api/webhook.js` and `package.json` files I gave you.
-2. Push to a GitHub repo, or deploy directly with Vercel CLI:
+1. Go to https://console.firebase.google.com → your existing project (or create a new one)
+2. Left sidebar → **Build → Firestore Database** → Create database (if not already set up) → start in production mode, pick a region close to you
+3. Now get admin credentials: **Project Settings (gear icon) → Service Accounts tab**
+4. Click **Generate new private key** → downloads a `.json` file
+5. Open that JSON file (any text app), copy the ENTIRE contents
+
+You'll paste that whole JSON blob as one environment variable in Part 4.
+
+---
+
+## PART 3: Groq key
+
+Same as before — console.groq.com, skip if you already have one.
+
+---
+
+## PART 4: Deploy to Vercel
+
+1. Push these files to a new GitHub repo — keep the exact structure:
    ```
-   npm i -g vercel
-   cd roast-bot-tg
-   vercel
+   match-bot/
+     api/webhook.js
+     api/match.js
+     api/_firebase.js
+     package.json
+     vercel.json
    ```
-3. In your Vercel project settings → **Environment Variables**, add:
-   - `GROQ_API_KEY` — from Part 2
-   - `TELEGRAM_BOT_TOKEN` — from Part 1
-4. Deploy. You'll get a URL like `https://roast-bot-tg-yourname.vercel.app`.
+   (On GitHub mobile: create each file with the full path typed in, like `api/webhook.js`, same trick as before.)
+
+2. Vercel → Add New Project → import the repo
+
+3. Add these Environment Variables:
+   - `GROQ_API_KEY` → your Groq key
+   - `TELEGRAM_BOT_TOKEN` → your bot token
+   - `FIREBASE_SERVICE_ACCOUNT_KEY` → paste the ENTIRE JSON file contents from Part 2 step 5, as one single value
+   - `CRON_SECRET` → make up any random string, e.g. `matchbot-secret-2026`
+
+4. Deploy
 
 ---
 
-## PART 4: Tell Telegram where your webhook is (1 min)
+## PART 5: Connect Telegram webhook
 
-Telegram needs a one-time API call to point at your deployed URL. Run this in your
-terminal (replace both placeholders):
+Same as before — paste into your browser (swap in your real token + Vercel URL):
 
-```bash
-curl "https://api.telegram.org/bot<YOUR_TELEGRAM_BOT_TOKEN>/setWebhook?url=https://roast-bot-tg-yourname.vercel.app/api/webhook"
+```
+https://api.telegram.org/bot<YOUR_TOKEN>/setWebhook?url=https://your-vercel-url.vercel.app/api/webhook
 ```
 
-You should get back: `{"ok":true,"result":true,"description":"Webhook was set"}`
+---
 
-That's it — no dashboard clicking, no verify token, no review. Done.
+## PART 6: Test onboarding
+
+Message your bot `/start` — it should ask you 3 questions one at a time.
+Answer all 3, it should confirm you're in the pool.
 
 ---
 
-## PART 5: Test it
+## PART 7: Test matching manually (before waiting a whole week)
 
-1. Open `https://t.me/your_bot_username` in Telegram, hit **Start**.
-2. Type "roast me" — you should get a reply in a couple seconds.
-3. If nothing happens: Vercel → your project → **Logs**, check for errors there first.
+The weekly cron won't fire until Monday 9am automatically. To test matching
+right now with at least 2 people who've completed onboarding, visit this URL
+in your browser (swap in your real values):
+
+```
+https://your-vercel-url.vercel.app/api/match
+```
+
+Wait — this will fail with "Unauthorized" because of CRON_SECRET protection.
+To manually trigger it for testing, you need to send that secret as a header,
+which a browser URL bar can't do. Easiest option: temporarily remove the
+CRON_SECRET check from match.js for testing, or ask me and I'll walk you
+through testing it properly once you've got 2+ test accounts onboarded.
 
 ---
 
-## PART 6: Share it — no limits
+## How the weekly cron works going forward
 
-Just drop `https://t.me/your_bot_username` straight into any WhatsApp group, Telegram
-group, Twitter/X, wherever. Anyone who taps it opens a chat with your bot immediately —
-**no tester whitelist, no 5-person cap, no review**. This is the big win over WhatsApp
-for a fast launch.
+Once deployed, Vercel automatically calls `/api/match` every **Monday at
+9am** (set in `vercel.json`) — you don't need to do anything. It'll pull
+everyone who's completed onboarding and not been matched, pair them up,
+generate an icebreaker via Groq, and DM both people.
 
----
+## Known limitation to flag
 
-## Notes
-- Telegram bots are free with no message limits (unlike WhatsApp's paid tiers).
-- If Groq ever rate-limits you under load, that's the first thing to watch in Logs —
-  easy fix later is just catching that error and replying "too many people roasting rn, try again."
-- Want group chat support too (bot responds when @mentioned in a group, not just DM)?
-  That's a small addition to the webhook — just ask.
+If a matched user hasn't set a public Telegram username, the other person
+can't easily reach them first — Telegram bots don't expose phone numbers
+or force a DM. For now, both people just see each other's answers +
+icebreaker, and whoever has a username visible gets contacted first. This is
+fine for an MVP test, but worth fixing later (e.g. building a simple relay
+so the bot forwards messages between matched pairs without needing usernames).
