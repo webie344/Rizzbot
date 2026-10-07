@@ -50,16 +50,30 @@ function createGunSound(ctx) {
     } catch (e) {}
 }
 
+// ============ SVG ICON LIBRARY ============
+const SVG_ICONS = {
+    punch: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 20h12a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2h-1V8a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2v5H6a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2z"/><path d="M9 8V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v3"/></svg>`,
+    kick: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l6-4 6 2 4-6"/><path d="M10 16l-2-8 4-2 2 6"/><circle cx="13" cy="4" r="2"/></svg>`,
+    roll: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9"/><polyline points="3 4 3 12 11 12"/></svg>`,
+    wave: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 11V7a1.5 1.5 0 0 1 3 0v4"/><path d="M10 11V5a1.5 1.5 0 0 1 3 0v6"/><path d="M13 11V6a1.5 1.5 0 0 1 3 0v7"/><path d="M16 11V9a1.5 1.5 0 0 1 3 0v7a7 7 0 0 1-7 7h-1a7 7 0 0 1-7-7v-2l-1-2"/></svg>`,
+    sword: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"/><line x1="13" y1="19" x2="19" y2="13"/><line x1="16" y1="16" x2="20" y2="20"/><line x1="19" y1="21" x2="21" y2="19"/></svg>`,
+    interact: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
+    shoot: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="5" y1="5" x2="8" y2="8"/><line x1="16" y1="16" x2="19" y2="19"/><line x1="19" y1="5" x2="16" y2="8"/><line x1="8" y1="16" x2="5" y2="19"/></svg>`,
+    reload: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"/><path d="M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>`,
+    bolt: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,
+    close: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`
+};
+
 // ============ REAL ACTIONS ============
 const REAL_ACTIONS = [
-    { name: 'Punch_Left',   icon: '👊', label: 'Punch L',   desc: '40 dmg' },
-    { name: 'Punch_Right',  icon: '✊', label: 'Punch R',   desc: '40 dmg' },
-    { name: 'Kick_Left',    icon: '🦶', label: 'Kick L',    desc: '50 dmg' },
-    { name: 'Kick_Right',   icon: '🦵', label: 'Kick R',    desc: '50 dmg' },
-    { name: 'Sword_Slash',  icon: '🗡️', label: 'Sword',     desc: '75 dmg' },
-    { name: 'Roll',         icon: '🌀', label: 'Roll',      desc: 'Dodge 3s cd' },
-    { name: 'Wave',         icon: '👋', label: 'Wave',      desc: 'Emote' },
-    { name: 'Interact',     icon: '🤝', label: 'Interact',  desc: 'Pickup / Open' }
+    { name: 'Punch_Left',   icon: 'punch',    label: 'Punch L',   desc: '40 dmg' },
+    { name: 'Punch_Right',  icon: 'punch',    label: 'Punch R',   desc: '40 dmg' },
+    { name: 'Kick_Left',    icon: 'kick',     label: 'Kick L',    desc: '50 dmg' },
+    { name: 'Kick_Right',   icon: 'kick',     label: 'Kick R',    desc: '50 dmg' },
+    { name: 'Sword_Slash',  icon: 'sword',    label: 'Sword',     desc: '75 dmg' },
+    { name: 'Roll',         icon: 'roll',     label: 'Roll',      desc: 'Dodge 3s cd' },
+    { name: 'Wave',         icon: 'wave',     label: 'Wave',      desc: 'Emote' },
+    { name: 'Interact',     icon: 'interact', label: 'Interact',  desc: 'Pickup / Open' }
 ];
 
 const MELEE = {
@@ -70,25 +84,24 @@ const MELEE = {
     Sword_Slash: { damage: 75, range: 2.6, cooldown: 600,  aimDot: 0.3 }
 };
 
-// ============ KENNEY BUILDINGS (same folder, no subfolder) ============
+// ============ KENNEY BUILDINGS (all 38) ============
 const KENNEY_BUILDINGS = [
-    'building-a.glb',
-    'building-b.glb',
-    'building-c.glb',
-    'building-d.glb',
-    'building-e.glb',
-    'building-f.glb',
-    'building-g.glb',
-    'building-h.glb',
-    'building-i.glb',
-    'building-j.glb',
-    'building-k.glb',
-    'building-l.glb'
+    'building-a.glb','building-b.glb','building-c.glb','building-d.glb',
+    'building-e.glb','building-f.glb','building-g.glb','building-h.glb',
+    'building-i.glb','building-j.glb','building-k.glb','building-l.glb',
+    'building-m.glb','building-n.glb','building-o.glb','building-p.glb',
+    'building-q.glb','building-r.glb','building-s.glb','building-t.glb',
+    'chimney-basic.glb','chimney-large.glb','chimney-medium.glb','chimney-small.glb',
+    'detail-tank.glb','detail-tank-large.glb',
+    'shipping-container-a.glb','shipping-container-b.glb','shipping-container-c.glb',
+    'solar-panel-flat.glb','solar-panel-landscape.glb','solar-panel-landscape-group.glb',
+    'solar-panel-portrait.glb','solar-panel-portrait-group.glb',
+    'water-tower.glb','windmill.glb','windmill-low.glb'
 ];
 
 class Game {
     constructor() {
-        console.log('🎮 CODM-STYLE - GLB BUILDINGS + HAND GUN');
+        console.log('🎮 CODM-STYLE - FULL UPDATE');
 
         this.currentUser = null;
         this.playerId = null;
@@ -143,6 +156,7 @@ class Game {
         this.gameActive = false;
         this._shootFlashUntil = 0;
 
+        // Camera
         this.camDist = 6.5;
         this.camHeight = 3.2;
         this.camLookHeight = 1.1;
@@ -151,9 +165,16 @@ class Game {
         this.playerYaw = 0;
         this.lookPitch = 0;
 
+        // ===== FASTER MOVEMENT (CODM speed) =====
+        // Base walk: 0.22 (was 0.14). Sprint multiplier applied later.
+        this.walkSpeed = 0.22;
+        this.sprintMultiplier = 1.7;      // sprint ~ 0.37
+        this.strafeMultiplier = 0.85;     // sideways slightly slower
+        this.backwardMultiplier = 0.75;   // backward slowest
+        this.rollSpeed = 0.65;            // dodge dash
         this.moveX = 0;
         this.moveY = 0;
-        this.moveSpeed = 0.14;
+        this.moveSpeed = 0.22;
         this.footstepTime = 0;
         this.touchSensitivity = 0.006;
 
@@ -176,33 +197,31 @@ class Game {
         this.insideBuilding = false;
         this.currentBuilding = null;
 
-        this.checkKenneyAvailability().then((available) => {
-            this.setupLighting();
-            this.setupGround();
-            if (available) this.createRealisticBuildings();
-            else this.createProceduralBuildings();
-            this.createContainers(120);
-            this.createOilBunkers(15);
-            this.createSimpleEnvironment();
-            this.spawnInitialAmmoBoxes(30);
-            this.setupControls();
-            this.setupMinimap();
-            this.buildAnimMenu();
-            this.setupKillFeed();
+        this.setupLighting();
+        this.setupGround();
+        this.createRealisticBuildings();
+        this.createContainers(80);
+        this.createOilBunkers(15);
+        this.createSimpleEnvironment();
+        this.spawnInitialAmmoBoxes(30);
+        this.setupControls();
+        this.setupMinimap();
+        this.buildAnimMenu();
+        this.setupKillFeed();
+        this.injectSVGIcons();
 
-            setInterval(() => this.checkNearbyDoors(), 200);
-            setInterval(() => this.updateCooldownUI(), 50);
+        setInterval(() => this.checkNearbyDoors(), 200);
+        setInterval(() => this.updateCooldownUI(), 50);
 
-            this.loadGLB().then(() => {
-                this.createLocalPlayer();
-                this.setupAuthListener();
-            }).catch(err => {
-                console.error('GLB failed:', err);
-                this.setupAuthListener();
-            });
-
-            this.animate();
+        this.loadGLB().then(() => {
+            this.createLocalPlayer();
+            this.setupAuthListener();
+        }).catch(err => {
+            console.error('GLB failed:', err);
+            this.setupAuthListener();
         });
+
+        this.animate();
 
         window.addEventListener('resize', () => {
             this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -213,20 +232,26 @@ class Game {
         window.addEventListener('beforeunload', () => this.cleanup());
     }
 
-    checkKenneyAvailability() {
-        return new Promise((resolve) => {
-            const loader = new GLTFLoader();
-            loader.load(KENNEY_BUILDINGS[0],
-                () => resolve(true),
-                undefined,
-                () => {
-                    console.warn('⚠️ Kenney buildings not found at ' + KENNEY_BUILDINGS[0] + '. Using procedural fallback.');
-                    resolve(false);
-                }
-            );
+    // ============ SVG ICON INJECTION ============
+    injectSVGIcons() {
+        const map = {
+            punchBtn: 'punch',
+            kickBtn: 'kick',
+            rollBtn: 'roll',
+            waveBtn: 'wave',
+            shootBtn: 'shoot',
+            reloadBtn: 'reload',
+            actionsBtn: 'bolt',
+            animMenuClose: 'close'
+        };
+        Object.entries(map).forEach(([id, iconKey]) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.innerHTML = `<span class="svg-icon">${SVG_ICONS[iconKey]}</span>`;
         });
     }
 
+    // ============ GLB SOLDIER ============
     loadGLB() {
         return new Promise((resolve, reject) => {
             const loader = new GLTFLoader();
@@ -253,6 +278,7 @@ class Game {
         });
     }
 
+    // ============ PROCEDURAL GUN ============
     createProceduralGun() {
         const gun = new THREE.Group();
         const black = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.4, metalness: 0.8 });
@@ -371,6 +397,7 @@ class Game {
         p.currentActionName = name;
     }
 
+    // ============ ACTION SYSTEM ============
     isOnCooldown(actionName) {
         return (this.cooldowns[actionName] || 0) > Date.now();
     }
@@ -502,6 +529,7 @@ class Game {
         });
     }
 
+    // ============ UI ============
     setupKillFeed() {
         if (!document.getElementById('killFeed')) {
             const el = document.createElement('div');
@@ -533,7 +561,7 @@ class Game {
         this.killMessages.forEach(m => {
             const d = document.createElement('div');
             d.style.cssText = `background:rgba(0,0,0,0.8);color:white;padding:5px 10px;margin-bottom:4px;border-radius:16px;font-size:12px;font-weight:bold;border-left:3px solid #ff4444;text-align:center;`;
-            d.innerHTML = `<span style="color:#ffaa00">${m.killer}</span> 🔫 <span style="color:#ff4444">${m.victim}</span>`;
+            d.innerHTML = `<span style="color:#ffaa00">${m.killer}</span> killed <span style="color:#ff4444">${m.victim}</span>`;
             this.killFeedElement.appendChild(d);
         });
     }
@@ -545,7 +573,6 @@ class Game {
             background:${type==='error'?'#ff4444':type==='success'?'#44ff44':'#4444ff'};
             color:white;padding:10px 22px;border-radius:30px;font-family:Arial;font-size:14px;font-weight:bold;
             z-index:10000;box-shadow:0 4px 20px rgba(0,0,0,0.5);text-shadow:1px 1px 2px black;
-            animation:notifFade 2.5s ease;
         `;
         el.textContent = msg;
         document.body.appendChild(el);
@@ -560,7 +587,7 @@ class Game {
             const item = document.createElement('div');
             item.className = 'anim-item';
             item.innerHTML = `
-                <div class="anim-icon">${a.icon}</div>
+                <div class="anim-icon">${SVG_ICONS[a.icon] || ''}</div>
                 <div class="anim-name">${a.label}</div>
                 <div class="anim-desc">${a.desc}</div>
             `;
@@ -582,14 +609,15 @@ class Game {
         if (m) m.classList.remove('open');
     }
 
+    // ============ SCENE ============
     setupLighting() {
         this.scene.add(new THREE.AmbientLight(0x606080, 0.8));
         const sun = new THREE.DirectionalLight(0xffeedd, 1.4);
         sun.position.set(30, 50, 30);
         sun.castShadow = true;
         sun.shadow.mapSize.set(2048, 2048);
-        sun.shadow.camera.left = -60; sun.shadow.camera.right = 60;
-        sun.shadow.camera.top = 60; sun.shadow.camera.bottom = -60;
+        sun.shadow.camera.left = -80; sun.shadow.camera.right = 80;
+        sun.shadow.camera.top = 80; sun.shadow.camera.bottom = -80;
         this.scene.add(sun);
         const fill = new THREE.DirectionalLight(0x88aacc, 0.8);
         fill.position.set(-30, 20, -40);
@@ -616,13 +644,24 @@ class Game {
         }
     }
 
+    // ============ REALISTIC BUILDINGS - ALL KENNEY, NO PROCEDURAL ============
     createRealisticBuildings() {
         const loader = new GLTFLoader();
-        const positions = [
-            {x:-15,z:-15},{x:15,z:-15},{x:-15,z:15},{x:15,z:15},
-            {x:-25,z:0},{x:25,z:0},{x:0,z:-25},{x:0,z:25},
-            {x:-35,z:-35},{x:35,z:35},{x:-35,z:35},{x:35,z:-35}
-        ];
+
+        // Grid: 6 x 5 = 30 positions spread across the map
+        const positions = [];
+        const cols = 6, rows = 5;
+        const spacingX = 22, spacingZ = 22;
+        const offsetX = -((cols - 1) * spacingX) / 2;
+        const offsetZ = -((rows - 1) * spacingZ) / 2;
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                positions.push({
+                    x: offsetX + c * spacingX + (Math.random() - 0.5) * 6,
+                    z: offsetZ + r * spacingZ + (Math.random() - 0.5) * 6
+                });
+            }
+        }
 
         positions.forEach((pos, i) => {
             const file = KENNEY_BUILDINGS[i % KENNEY_BUILDINGS.length];
@@ -638,7 +677,7 @@ class Game {
                 });
                 const box = new THREE.Box3().setFromObject(b);
                 const size = box.getSize(new THREE.Vector3());
-                const targetHeight = 12 + Math.random() * 8;
+                const targetHeight = 10 + Math.random() * 10;
                 if (size.y > 0) {
                     const scale = targetHeight / size.y;
                     b.scale.setScalar(scale);
@@ -651,86 +690,10 @@ class Game {
                     doorPos: new THREE.Vector3(pos.x, 1.2, pos.z + (size.z * 0.6))
                 });
             }, undefined, () => {
-                this.createDetailedBuilding(
-                    pos.x, pos.z,
-                    8 + Math.random()*4, 8 + Math.random()*4, 6 + Math.random()*4,
-                    [0x8B4513, 0x5D3A1A, 0xA0522D][i % 3]
-                );
+                // Silent fail. No procedural fallback.
             });
         });
-    }
-
-    createProceduralBuildings() {
-        const colors = [0x8B4513, 0x5D3A1A, 0xA0522D];
-        const pos = [
-            {x:-15,z:-15},{x:15,z:-15},{x:-15,z:15},{x:15,z:15},
-            {x:-25,z:0},{x:25,z:0},{x:0,z:-25},{x:0,z:25},
-            {x:-35,z:-35},{x:35,z:35},{x:-35,z:35},{x:35,z:-35}
-        ];
-        pos.forEach((p, i) => this.createDetailedBuilding(
-            p.x, p.z, 8 + Math.random()*4, 8 + Math.random()*4, 6 + Math.random()*4, colors[i % 3]
-        ));
-    }
-
-    createDetailedBuilding(x, z, w, d, h, color) {
-        const g = new THREE.Group();
-        const wt = 0.5;
-        const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.7 });
-        const trim = new THREE.MeshStandardMaterial({ color: 0x884422 });
-
-        const back = new THREE.Mesh(new THREE.BoxGeometry(w, h, wt), mat);
-        back.position.set(0, h/2, -d/2 + wt/2);
-        back.castShadow = back.receiveShadow = true; g.add(back);
-
-        const left = new THREE.Mesh(new THREE.BoxGeometry(wt, h, d), mat);
-        left.position.set(-w/2 + wt/2, h/2, 0);
-        left.castShadow = left.receiveShadow = true; g.add(left);
-
-        const right = new THREE.Mesh(new THREE.BoxGeometry(wt, h, d), mat);
-        right.position.set(w/2 - wt/2, h/2, 0);
-        right.castShadow = right.receiveShadow = true; g.add(right);
-
-        const dw = 2.0, dh = 2.5;
-        const fl = new THREE.Mesh(new THREE.BoxGeometry((w - dw)/2, h, wt), mat);
-        fl.position.set(-(w + dw)/4, h/2, d/2 - wt/2);
-        fl.castShadow = fl.receiveShadow = true; g.add(fl);
-
-        const fr = new THREE.Mesh(new THREE.BoxGeometry((w - dw)/2, h, wt), mat);
-        fr.position.set((w + dw)/4, h/2, d/2 - wt/2);
-        fr.castShadow = fr.receiveShadow = true; g.add(fr);
-
-        const top = new THREE.Mesh(new THREE.BoxGeometry(dw, h - dh, wt), mat);
-        top.position.set(0, h - (h - dh)/2, d/2 - wt/2);
-        top.castShadow = top.receiveShadow = true; g.add(top);
-
-        const frame = new THREE.Mesh(new THREE.BoxGeometry(dw + 0.2, dh + 0.2, 0.3), trim);
-        frame.position.set(0, dh/2, d/2 - 0.1); g.add(frame);
-
-        const door = new THREE.Mesh(new THREE.BoxGeometry(dw - 0.2, dh - 0.2, 0.2), new THREE.MeshStandardMaterial({ color: 0x8B5A2B }));
-        door.position.set(0, dh/2, d/2);
-        door.castShadow = door.receiveShadow = true; g.add(door);
-
-        const roof = new THREE.Mesh(new THREE.ConeGeometry(Math.max(w, d) * 0.7, 2.5, 4), new THREE.MeshStandardMaterial({ color: 0x884422 }));
-        roof.position.set(0, h + 1.25, 0);
-        roof.rotation.y = Math.PI/4;
-        roof.castShadow = roof.receiveShadow = true; g.add(roof);
-
-        const floor = new THREE.Mesh(
-            new THREE.PlaneGeometry(w - 1.5, d - 1.5),
-            new THREE.MeshStandardMaterial({ color: 0x5a3a1a, side: THREE.DoubleSide })
-        );
-        floor.rotation.x = -Math.PI/2;
-        floor.position.set(0, 0.05, 0);
-        floor.receiveShadow = true; g.add(floor);
-
-        g.position.set(x, 0, z);
-        this.scene.add(g);
-
-        this.buildings.push({
-            mesh: g,
-            doorPos: new THREE.Vector3(x, 1.2, z + d/2),
-            interior: { minX: x - w/2 + wt, maxX: x + w/2 - wt, minZ: z - d/2 + wt, maxZ: z + d/2 - wt }
-        });
+        console.log(`🏢 Loading ${positions.length} Kenney buildings from ${KENNEY_BUILDINGS.length} unique models`);
     }
 
     createContainers(count) {
@@ -759,7 +722,7 @@ class Game {
                 let close = false;
                 for (const b of this.buildings) {
                     const bp = b.mesh.position;
-                    if (Math.hypot(x-bp.x, z-bp.z) < 10) { close = true; break; }
+                    if (Math.hypot(x-bp.x, z-bp.z) < 8) { close = true; break; }
                 }
                 if (!close) { g.position.set(x, 0, z); placed = true; }
                 att++;
@@ -791,10 +754,10 @@ class Game {
                 let close = false;
                 for (const b of this.buildings) {
                     const bp = b.mesh.position;
-                    if (Math.hypot(x-bp.x, z-bp.z) < 15) { close = true; break; }
+                    if (Math.hypot(x-bp.x, z-bp.z) < 12) { close = true; break; }
                 }
                 for (const c of this.containers) {
-                    if (Math.hypot(x-c.position.x, z-c.position.z) < 10) { close = true; break; }
+                    if (Math.hypot(x-c.position.x, z-c.position.z) < 8) { close = true; break; }
                 }
                 if (!close) { g.position.set(x, 0, z); placed = true; }
                 att++;
@@ -804,7 +767,7 @@ class Game {
     }
 
     createSimpleEnvironment() {
-        for (let i = 0; i < 50; i++) {
+        for (let i = 0; i < 40; i++) {
             const g = new THREE.Group();
             const trunk = new THREE.Mesh(
                 new THREE.CylinderGeometry(0.5, 0.7, 3),
@@ -823,7 +786,7 @@ class Game {
                 let close = false;
                 for (const b of this.buildings) {
                     const bp = b.mesh.position;
-                    if (Math.hypot(x-bp.x, z-bp.z) < 8) { close = true; break; }
+                    if (Math.hypot(x-bp.x, z-bp.z) < 7) { close = true; break; }
                 }
                 if (!close) { g.position.set(x, 0, z); placed = true; }
                 att++;
@@ -852,7 +815,7 @@ class Game {
         ctx.font = 'bold 32px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('🔫', 32, 32);
+        ctx.fillText('+', 32, 32);
         const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv) }));
         spr.scale.set(0.5, 0.5, 0.5);
         spr.position.y = 0.6;
@@ -888,7 +851,7 @@ class Game {
         this.currentBuilding = b;
         this.playerPos.set(b.doorPos.x, 0, b.doorPos.z - 3);
         const el = document.getElementById('doorIndicator');
-        if (el) el.textContent = '🚪 INSIDE - TAP SHOOT TO EXIT';
+        if (el) el.textContent = 'INSIDE - TAP SHOOT TO EXIT';
     }
 
     exitBuilding() {
@@ -1407,6 +1370,7 @@ class Game {
         this.otherPlayers.delete(pid);
     }
 
+    // ============ MAIN LOOP ============
     animate() {
         requestAnimationFrame(() => this.animate());
         const now = Date.now();
@@ -1417,12 +1381,21 @@ class Game {
             const forwardDir = new THREE.Vector3(-Math.sin(this.playerYaw), 0, -Math.cos(this.playerYaw));
             const rightDir = new THREE.Vector3(Math.cos(this.playerYaw), 0, -Math.sin(this.playerYaw));
 
+            // ===== FASTER MOVEMENT WITH DIRECTIONAL MULTIPLIERS =====
             const moveDelta = new THREE.Vector3();
-            if (Math.abs(this.moveY) > 0.05) moveDelta.addScaledVector(forwardDir, this.moveY * this.moveSpeed);
-            if (Math.abs(this.moveX) > 0.05) moveDelta.addScaledVector(rightDir, this.moveX * this.moveSpeed);
+            const fwdAmount = this.moveY;
+            const sideAmount = this.moveX;
+
+            if (Math.abs(fwdAmount) > 0.05) {
+                let mult = fwdAmount > 0 ? this.sprintMultiplier : this.backwardMultiplier;
+                moveDelta.addScaledVector(forwardDir, fwdAmount * this.walkSpeed * mult);
+            }
+            if (Math.abs(sideAmount) > 0.05) {
+                moveDelta.addScaledVector(rightDir, sideAmount * this.walkSpeed * this.strafeMultiplier);
+            }
 
             if (this.rolling && now < this.rollUntil) {
-                moveDelta.addScaledVector(this.rollDirection, 0.4);
+                moveDelta.addScaledVector(this.rollDirection, this.rollSpeed);
             } else if (this.rolling) {
                 this.rolling = false;
             }
@@ -1430,16 +1403,18 @@ class Game {
             const speed = moveDelta.length();
             if (speed > 0.001) {
                 this.playerPos.add(moveDelta);
-                this.footstepTime += 0.2;
+                this.footstepTime += 0.25;
             }
 
-            this.playerPos.x = Math.max(-60, Math.min(60, this.playerPos.x));
-            this.playerPos.z = Math.max(-60, Math.min(60, this.playerPos.z));
+            this.playerPos.x = Math.max(-70, Math.min(70, this.playerPos.x));
+            this.playerPos.z = Math.max(-70, Math.min(70, this.playerPos.z));
 
             if (this.insideBuilding && this.currentBuilding) {
                 const i = this.currentBuilding.interior;
-                this.playerPos.x = Math.max(i.minX + 0.6, Math.min(i.maxX - 0.6, this.playerPos.x));
-                this.playerPos.z = Math.max(i.minZ + 0.6, Math.min(i.maxZ - 0.6, this.playerPos.z));
+                if (i) {
+                    this.playerPos.x = Math.max(i.minX + 0.6, Math.min(i.maxX - 0.6, this.playerPos.x));
+                    this.playerPos.z = Math.max(i.minZ + 0.6, Math.min(i.maxZ - 0.6, this.playerPos.z));
+                }
             }
 
             if (this.localPlayer) {
@@ -1452,7 +1427,7 @@ class Game {
                 } else {
                     this.overrideAnim = null;
                     if (this.rolling) anim = 'Roll';
-                    else if (speed > 0.02) anim = 'Run';
+                    else if (speed > 0.03) anim = 'Run';
                     else anim = 'Idle_Gun';
                 }
 
@@ -1537,10 +1512,3 @@ window.onload = () => {
     try { window.game = new Game(); }
     catch (e) { console.error('Game start failed:', e); }
 };
-
-if (!document.getElementById('game-anim-styles')) {
-    const s = document.createElement('style');
-    s.id = 'game-anim-styles';
-    s.textContent = `@keyframes notifFade { 0% { opacity: 0; transform: translate(-50%, -20px); } 10% { opacity: 1; transform: translate(-50%, 0); } 90% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; transform: translate(-50%, -20px); } }`;
-    document.head.appendChild(s);
-}
