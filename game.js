@@ -85,8 +85,8 @@ class Game {
         this.glbAnimations = {};
         this.glbLoaded = false;
 
-        // My local player (my own soldier)
-        this.localPlayer = null; // { group, model, mixer, actions, current }
+        // Local player
+        this.localPlayer = null;
 
         // Other players
         this.otherPlayers = new Map();
@@ -122,12 +122,12 @@ class Game {
         this._shootFlashUntil = 0;
         this._lastShootTime = 0;
 
-        // Third-person camera offsets
-        this.camDist = 3.8;    // how far behind player
-        this.camHeight = 1.9;  // how high above player
-        this.camLookHeight = 1.3; // where camera looks at (player's chest level)
+        // Third-person camera - FIXED values
+        this.camDist = 6.5;
+        this.camHeight = 3.2;
+        this.camLookHeight = 1.1;
 
-        // Player position (world units) - this is separate from camera now
+        // Player position (world)
         this.playerPos = new THREE.Vector3(0, 0, 15);
         this.playerYaw = 0;
         this.lookPitch = 0;
@@ -153,7 +153,7 @@ class Game {
         this.lastSwipeX = 0;
         this.lastSwipeY = 0;
 
-        // Buildings / world
+        // World
         this.buildings = [];
         this.containers = [];
         this.oilBunkers = [];
@@ -229,14 +229,13 @@ class Game {
     createInstance() {
         if (!this.glbLoaded) return null;
         const model = SkeletonUtils.clone(this.glbBase);
-        // Rotate 180° because the raw model faces +Z (runs toward camera by default).
-        // After this, it faces -Z which is "forward" in our world.
+        // Rotate 180° so model faces -Z (Three.js "forward")
         model.rotation.y = Math.PI;
 
         const group = new THREE.Group();
         group.add(model);
 
-        // Auto-fit height to 1.8 units (matches player scale)
+        // Fit to 1.8 units tall
         const box = new THREE.Box3().setFromObject(model);
         const size = box.getSize(new THREE.Vector3());
         if (size.y > 0) {
@@ -266,7 +265,7 @@ class Game {
         return { group, model, mixer, actions, currentActionName: null, nameTag, healthBar, healthFill, isDead: false, deathPlayedAt: 0 };
     }
 
-    // ============ LOCAL PLAYER (your own soldier) ============
+    // ============ LOCAL PLAYER ============
     createLocalPlayer() {
         const inst = this.createInstance();
         if (!inst) { console.warn('No local player - GLB missing'); return; }
@@ -802,29 +801,20 @@ class Game {
         this._shootFlashUntil = Date.now() + 250;
         this._lastShootTime = Date.now();
 
-        // Play shoot animation on local player
         if (this.localPlayer) {
             this.playAnim(this.localPlayer, 'Gun_Shoot', { loop: false, clamp: false, fade: 0.05 });
-            // Return to idle after animation
-            setTimeout(() => {
-                if (this.localPlayer && this.gameActive) {
-                    this.playAnim(this.localPlayer, 'Idle_Gun', { fade: 0.2 });
-                }
-            }, 400);
         }
 
         if (this.firebaseReady && this.playerRef) {
             updateDoc(this.playerRef, { ammo: this.ammo }).catch(() => {});
         }
 
-        // Ray from camera through crosshair (center of screen)
         const raycaster = new THREE.Raycaster();
         raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
         const origin = raycaster.ray.origin.clone();
         const direction = raycaster.ray.direction.clone();
         const rayLen = 40;
 
-        // Ammo box
         for (let i = this.ammoBoxes.length - 1; i >= 0; i--) {
             const b = this.ammoBoxes[i];
             const to = b.position.clone().sub(origin);
@@ -841,7 +831,6 @@ class Game {
             }
         }
 
-        // Hit player
         for (const [pid, p] of this.otherPlayers) {
             if (!p.group || p.isDead) continue;
             const target = p.group.position.clone();
@@ -882,14 +871,8 @@ class Game {
         this.lastDamagedBy = { id: attackerId, name: attackerName };
         this.updateUI();
 
-        // Play hit animation on local player
         if (this.localPlayer && this.health > 0) {
             this.playAnim(this.localPlayer, 'HitRecieve', { loop: false, clamp: false, fade: 0.05 });
-            setTimeout(() => {
-                if (this.localPlayer && this.gameActive && this.health > 0) {
-                    this.playAnim(this.localPlayer, 'Idle_Gun', { fade: 0.2 });
-                }
-            }, 400);
         }
 
         document.body.style.backgroundColor = '#ff0000';
@@ -903,7 +886,6 @@ class Game {
     async die() {
         this.gameActive = false;
 
-        // Play death anim on local player
         if (this.localPlayer) {
             this.playAnim(this.localPlayer, 'Death', { loop: false, clamp: true, fade: 0.1 });
         }
@@ -1156,16 +1138,22 @@ class Game {
         this.lastUpdateTime = now;
 
         if (this.gameActive) {
-            // Movement in world space
-            const forward = new THREE.Vector3(Math.sin(this.playerYaw), 0, Math.cos(this.playerYaw));
-            // Note: forward is the direction player is FACING. But joystick -Y is "up on screen" which = "away from camera".
-            // In third person, moving joystick up should move player AWAY from camera.
-            // Player's "forward" (away from camera) is opposite of camera-forward.
-            const right = new THREE.Vector3(Math.cos(this.playerYaw), 0, -Math.sin(this.playerYaw));
+            // Player forward direction (yaw = 0 means facing -Z)
+            const forwardDir = new THREE.Vector3(
+                -Math.sin(this.playerYaw),
+                0,
+                -Math.cos(this.playerYaw)
+            );
+            const rightDir = new THREE.Vector3(
+                Math.cos(this.playerYaw),
+                0,
+                -Math.sin(this.playerYaw)
+            );
 
+            // Apply movement in world space
             const moveDelta = new THREE.Vector3();
-            if (Math.abs(this.moveY) > 0.05) moveDelta.addScaledVector(forward, this.moveY * this.moveSpeed);
-            if (Math.abs(this.moveX) > 0.05) moveDelta.addScaledVector(right, this.moveX * this.moveSpeed);
+            if (Math.abs(this.moveY) > 0.05) moveDelta.addScaledVector(forwardDir, this.moveY * this.moveSpeed);
+            if (Math.abs(this.moveX) > 0.05) moveDelta.addScaledVector(rightDir, this.moveX * this.moveSpeed);
 
             const speed = moveDelta.length();
             if (speed > 0.001) {
@@ -1189,40 +1177,32 @@ class Game {
                 this.localPlayer.group.position.copy(this.playerPos);
                 this.localPlayer.group.rotation.y = this.playerYaw;
 
-                // Choose animation
                 let anim = 'Idle_Gun';
-                const now2 = Date.now();
-                if (now2 < this._shootFlashUntil) anim = 'Gun_Shoot';
+                if (now < this._shootFlashUntil) anim = 'Gun_Shoot';
                 else if (speed > 0.02) anim = 'Run';
 
-                this.playAnim(this.localPlayer, anim, { loop: anim !== 'Gun_Shoot', clamp: anim === 'Gun_Shoot', fade: 0.15 });
+                this.playAnim(this.localPlayer, anim, {
+                    loop: anim !== 'Gun_Shoot',
+                    clamp: anim === 'Gun_Shoot',
+                    fade: 0.15
+                });
                 this.localPlayer.mixer.update(dt);
             }
 
-            // Camera follows local player (third person)
-            const camOffset = new THREE.Vector3(
-                Math.sin(this.playerYaw) * this.camDist,
-                this.camHeight + this.lookPitch * 1.5,
-                Math.cos(this.playerYaw) * this.camDist
+            // ===== THIRD-PERSON CAMERA (clean) =====
+            // Camera sits BEHIND player
+            const camPos = this.playerPos.clone().add(
+                forwardDir.clone().multiplyScalar(-this.camDist)
             );
-            // Camera sits behind player (opposite of facing direction)
-            this.camera.position.copy(this.playerPos).add(new THREE.Vector3(
-                Math.sin(this.playerYaw) * this.camDist,
-                this.camHeight,
-                Math.cos(this.playerYaw) * this.camDist
-            ));
+            camPos.y = this.playerPos.y + this.camHeight;
+            this.camera.position.copy(camPos);
 
-            // Look at a point ahead of the player
-            const lookAt = this.playerPos.clone();
-            lookAt.y += this.camLookHeight;
-            // Adjust look-at based on pitch (looking up/down)
-            const pitchOffset = Math.tan(this.lookPitch) * this.camDist;
-            lookAt.x += Math.sin(this.playerYaw) * -pitchOffset * Math.sin(1); // approach below
-            this.camera.lookAt(
-                this.playerPos.x - Math.sin(this.playerYaw) * 2,
-                this.playerPos.y + this.camLookHeight + this.lookPitch * 3,
-                this.playerPos.z - Math.cos(this.playerYaw) * 2
-            );
+            // Camera looks at a point AHEAD of the player, adjusted by pitch
+            const lookTarget = this.playerPos.clone();
+            lookTarget.y += this.camLookHeight;
+            lookTarget.add(forwardDir.clone().multiplyScalar(3));
+            lookTarget.y += this.lookPitch * 4;  // pitch up = look up
+            this.camera.lookAt(lookTarget);
 
             // Update other players
             this.otherPlayers.forEach((p, pid) => {
@@ -1241,12 +1221,15 @@ class Game {
                     if (p.isDead) anim = 'Death';
                     else if (isShooting) anim = 'Gun_Shoot';
                     else if (isMoving) anim = 'Run';
-                    this.playAnim(p, anim, { loop: anim !== 'Death' && anim !== 'Gun_Shoot', clamp: anim === 'Death' || anim === 'Gun_Shoot', fade: 0.15 });
+                    this.playAnim(p, anim, {
+                        loop: anim !== 'Death' && anim !== 'Gun_Shoot',
+                        clamp: anim === 'Death' || anim === 'Gun_Shoot',
+                        fade: 0.15
+                    });
                     p.mixer.update(dt);
                 }
                 if (p.isDead && now - p.deathPlayedAt > 2500) { this.removePlayer(pid); return; }
 
-                // Name tag / health bar
                 if (p.nameTag && p.group) {
                     const v = p.group.position.clone();
                     v.y += 2.0;
