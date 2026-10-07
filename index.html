@@ -1,14 +1,60 @@
 <!DOCTYPE html>
-
-<html>
+<html lang="en">
 <head>
-  <meta http-equiv="CONTENT-TYPE" content="text/html; charset=UTF-8">
-  <link rel="stylesheet" href="styles/style.css"/>
-  <title>Hello, World!</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>REALISTIC GTA STYLE - FIXED</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <h1>
-    Hello, World!
-  </h1>
+    <div id="rotateDevice">
+        <div class="icon">↻</div>
+        <h2>PLEASE ROTATE YOUR DEVICE</h2>
+        <p>Landscape mode required</p>
+    </div>
+
+    <div id="gameContainer"></div>
+    
+    <!-- HUD -->
+    <div id="hud">
+        <div id="stats">
+            <div class="stat-item" id="health"><span class="stat-icon">❤️</span><span class="stat-value" id="healthValue">100</span></div>
+            <div class="stat-item" id="score"><span class="stat-icon">⭐</span><span class="stat-value" id="scoreValue">0</span></div>
+            <div class="stat-item" id="ammo"><span class="stat-icon">🔫</span><span class="stat-value" id="ammoValue">30</span></div>
+            <div class="stat-item" id="boxes"><span class="stat-icon">📦</span><span class="stat-value" id="boxesValue">0</span></div>
+        </div>
+    </div>
+    
+    <!-- Minimap -->
+    <div id="minimap"><canvas id="minimapCanvas" width="200" height="200"></canvas></div>
+    <div id="crosshair"></div>
+    
+    <!-- Joystick -->
+    <div id="joystickContainer"><div id="joystickBase"><div id="joystickThumb"></div></div></div>
+    <!-- Swipe zone -->
+    <div id="viewSwipeZone"></div>
+    
+    <div id="movementIndicator"><span id="movementArrow">⬆️</span><span>SPEED: <span id="movementSpeed">0</span></span></div>
+    <div id="doorIndicator">🚪 NEAR DOOR - TAP SHOOT TO ENTER</div>
+    
+    <div id="actionButtons"><div class="action-btn" id="shootBtn">🔫</div><div class="action-btn" id="reloadBtn">🔄</div></div>
+    
+    <div id="gameOverlay"><div id="gameOverMenu"><h1>GAME OVER</h1><h2 id="finalScore">Score: 0</h2><button id="restartBtn">PLAY AGAIN</button></div></div>
+    
+    <div id="instructions">
+        <h2>🎮 GTA STYLE REALISM 🎮</h2>
+
+        <button id="startBtn">START GAME</button>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.128.0/build/three.module.js"
+            }
+        }
+    </script>
+
+    <script type="module" src="game.js"></script>
 </body>
 </html>
