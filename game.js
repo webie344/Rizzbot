@@ -24,6 +24,7 @@ try {
     db = getFirestore(app);
 } catch (e) { console.error('Firebase init:', e); }
 
+// ============ GUN SOUND ============
 function playGunSound() {
     try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -49,8 +50,7 @@ function createGunSound(ctx) {
     } catch (e) {}
 }
 
-// ============ REAL ACTIONS CATALOG ============
-// Only actions with real gameplay. Everything else is auto.
+// ============ REAL ACTIONS ============
 const REAL_ACTIONS = [
     { name: 'Punch_Left',   icon: '👊', label: 'Punch L',   desc: '40 dmg' },
     { name: 'Punch_Right',  icon: '✊', label: 'Punch R',   desc: '40 dmg' },
@@ -62,7 +62,6 @@ const REAL_ACTIONS = [
     { name: 'Interact',     icon: '🤝', label: 'Interact',  desc: 'Pickup / Open' }
 ];
 
-// Melee damage & cooldowns
 const MELEE = {
     Punch_Left:  { damage: 40, range: 2.2, cooldown: 500,  aimDot: 0.5 },
     Punch_Right: { damage: 40, range: 2.2, cooldown: 500,  aimDot: 0.5 },
@@ -71,9 +70,25 @@ const MELEE = {
     Sword_Slash: { damage: 75, range: 2.6, cooldown: 600,  aimDot: 0.3 }
 };
 
+// ============ KENNEY BUILDINGS (same folder, no subfolder) ============
+const KENNEY_BUILDINGS = [
+    'building-a.glb',
+    'building-b.glb',
+    'building-c.glb',
+    'building-d.glb',
+    'building-e.glb',
+    'building-f.glb',
+    'building-g.glb',
+    'building-h.glb',
+    'building-i.glb',
+    'building-j.glb',
+    'building-k.glb',
+    'building-l.glb'
+];
+
 class Game {
     constructor() {
-        console.log('🎮 CODM-STYLE - FULL ACTIONS');
+        console.log('🎮 CODM-STYLE - GLB BUILDINGS + HAND GUN');
 
         this.currentUser = null;
         this.playerId = null;
@@ -88,18 +103,16 @@ class Game {
         this.glbBase = null;
         this.glbAnimations = {};
         this.glbLoaded = false;
+        this.handBoneName = null;
 
         this.localPlayer = null;
         this.otherPlayers = new Map();
         this.lastUpdateTime = Date.now();
 
-        // One-shot animation override
         this.overrideAnim = null;
         this.overrideUntil = 0;
 
-        // Cooldowns (timestamp when allowed again)
         this.cooldowns = {};
-        // Roll dodge state
         this.rolling = false;
         this.rollUntil = 0;
         this.rollDirection = new THREE.Vector3();
@@ -163,32 +176,33 @@ class Game {
         this.insideBuilding = false;
         this.currentBuilding = null;
 
-        this.killMessages = [];
-        this.setupKillFeed();
-        this.setupLighting();
-        this.setupGround();
-        this.createRealisticBuildings();
-        this.createContainers(120);
-        this.createOilBunkers(15);
-        this.createSimpleEnvironment();
-        this.spawnInitialAmmoBoxes(30);
-        this.setupControls();
-        this.setupMinimap();
-        this.buildAnimMenu();
+        this.checkKenneyAvailability().then((available) => {
+            this.setupLighting();
+            this.setupGround();
+            if (available) this.createRealisticBuildings();
+            else this.createProceduralBuildings();
+            this.createContainers(120);
+            this.createOilBunkers(15);
+            this.createSimpleEnvironment();
+            this.spawnInitialAmmoBoxes(30);
+            this.setupControls();
+            this.setupMinimap();
+            this.buildAnimMenu();
+            this.setupKillFeed();
 
-        setInterval(() => this.checkNearbyDoors(), 200);
-        // Cooldown ticker for UI
-        setInterval(() => this.updateCooldownUI(), 50);
+            setInterval(() => this.checkNearbyDoors(), 200);
+            setInterval(() => this.updateCooldownUI(), 50);
 
-        this.loadGLB().then(() => {
-            this.createLocalPlayer();
-            this.setupAuthListener();
-        }).catch(err => {
-            console.error('GLB failed:', err);
-            this.setupAuthListener();
+            this.loadGLB().then(() => {
+                this.createLocalPlayer();
+                this.setupAuthListener();
+            }).catch(err => {
+                console.error('GLB failed:', err);
+                this.setupAuthListener();
+            });
+
+            this.animate();
         });
-
-        this.animate();
 
         window.addEventListener('resize', () => {
             this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -199,7 +213,20 @@ class Game {
         window.addEventListener('beforeunload', () => this.cleanup());
     }
 
-    // ============ GLB ============
+    checkKenneyAvailability() {
+        return new Promise((resolve) => {
+            const loader = new GLTFLoader();
+            loader.load(KENNEY_BUILDINGS[0],
+                () => resolve(true),
+                undefined,
+                () => {
+                    console.warn('⚠️ Kenney buildings not found at ' + KENNEY_BUILDINGS[0] + '. Using procedural fallback.');
+                    resolve(false);
+                }
+            );
+        });
+    }
+
     loadGLB() {
         return new Promise((resolve, reject) => {
             const loader = new GLTFLoader();
@@ -216,7 +243,7 @@ class Game {
                     gltf.animations.forEach(clip => {
                         this.glbAnimations[clip.name] = clip;
                     });
-                    console.log('✅ GLB loaded. Anims:', Object.keys(this.glbAnimations).length);
+                    console.log('✅ Soldier.glb loaded. Anims:', Object.keys(this.glbAnimations).length);
                     this.glbLoaded = true;
                     resolve();
                 },
@@ -226,6 +253,44 @@ class Game {
         });
     }
 
+    createProceduralGun() {
+        const gun = new THREE.Group();
+        const black = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.4, metalness: 0.8 });
+        const darkGrey = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.6 });
+
+        const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.4, 8), black);
+        barrel.rotation.x = Math.PI / 2;
+        barrel.position.set(0, 0.02, 0.2);
+        barrel.castShadow = true;
+        gun.add(barrel);
+
+        const slide = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.07, 0.3), black);
+        slide.position.set(0, 0.03, 0.1);
+        slide.castShadow = true;
+        gun.add(slide);
+
+        const grip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.14, 0.1), darkGrey);
+        grip.position.set(0, -0.08, -0.02);
+        grip.rotation.x = 0.25;
+        grip.castShadow = true;
+        gun.add(grip);
+
+        const guard = new THREE.Mesh(new THREE.TorusGeometry(0.04, 0.008, 4, 8, Math.PI), darkGrey);
+        guard.rotation.x = -Math.PI / 2;
+        guard.position.set(0, -0.03, 0.06);
+        gun.add(guard);
+
+        const muzzle = new THREE.Mesh(
+            new THREE.SphereGeometry(0.02, 6),
+            new THREE.MeshStandardMaterial({ color: 0xffaa00, emissive: 0x442200 })
+        );
+        muzzle.position.set(0, 0.02, 0.42);
+        gun.add(muzzle);
+
+        gun.scale.setScalar(1.0);
+        return gun;
+    }
+
     createInstance() {
         if (!this.glbLoaded) return null;
         const model = SkeletonUtils.clone(this.glbBase);
@@ -233,6 +298,34 @@ class Game {
         const group = new THREE.Group();
         group.add(model);
         model.scale.setScalar(1.163);
+
+        let handBone = null;
+        model.traverse((node) => {
+            if (node.isBone) {
+                const name = node.name.toLowerCase();
+                if (name.includes('righthand') || name.includes('right_hand') || name.includes('hand_r') || name === 'mixamorig:righthand') {
+                    handBone = node;
+                }
+            }
+        });
+
+        if (!handBone) {
+            if (!this.handBoneName) {
+                const bones = [];
+                model.traverse((n) => { if (n.isBone) bones.push(n.name); });
+                console.log('❌ No right hand bone found. Bone names:', bones.join(', '));
+                this.handBoneName = 'NONE';
+            }
+        } else {
+            if (!this.handBoneName) {
+                console.log('✅ Found hand bone:', handBone.name);
+                this.handBoneName = handBone.name;
+            }
+            const gun = this.createProceduralGun();
+            gun.position.set(0, 0, 0);
+            gun.rotation.set(0, 0, 0);
+            handBone.add(gun);
+        }
 
         const mixer = new THREE.AnimationMixer(model);
         const actions = {};
@@ -278,7 +371,6 @@ class Game {
         p.currentActionName = name;
     }
 
-    // ============ ACTION SYSTEM ============
     isOnCooldown(actionName) {
         return (this.cooldowns[actionName] || 0) > Date.now();
     }
@@ -291,7 +383,6 @@ class Game {
         }
         if (!this.localPlayer) return;
 
-        // === Melee attacks ===
         if (MELEE[actionName]) {
             const cfg = MELEE[actionName];
             this.cooldowns[actionName] = Date.now() + cfg.cooldown;
@@ -300,13 +391,11 @@ class Game {
             return;
         }
 
-        // === Roll (dodge) ===
         if (actionName === 'Roll') {
             this.cooldowns.Roll = Date.now() + 3000;
             this.playOverride('Roll', 700);
             this.rolling = true;
             this.rollUntil = Date.now() + 700;
-            // Roll in current movement direction, or forward if not moving
             const fwd = new THREE.Vector3(-Math.sin(this.playerYaw), 0, -Math.cos(this.playerYaw));
             const right = new THREE.Vector3(Math.cos(this.playerYaw), 0, -Math.sin(this.playerYaw));
             const dir = new THREE.Vector3();
@@ -318,19 +407,16 @@ class Game {
             return;
         }
 
-        // === Wave (emote) ===
         if (actionName === 'Wave') {
             this.cooldowns.Wave = Date.now() + 2000;
             this.playOverride('Wave', 1500);
             return;
         }
 
-        // === Interact (pickup / door) ===
         if (actionName === 'Interact') {
             this.cooldowns.Interact = Date.now() + 500;
             this.playOverride('Interact', 600);
 
-            // Priority 1: ammo box within 3m
             let nearest = null, nearestDist = 3;
             this.ammoBoxes.forEach(b => {
                 const d = this.playerPos.distanceTo(b.position);
@@ -347,11 +433,7 @@ class Game {
                 if (this.firebaseReady && this.playerRef) updateDoc(this.playerRef, { ammo: this.ammo }).catch(() => {});
                 return;
             }
-            // Priority 2: door in range
-            if (this.nearbyDoor) {
-                this.enterBuilding(this.nearbyDoor);
-                return;
-            }
+            if (this.nearbyDoor) { this.enterBuilding(this.nearbyDoor); return; }
             this.showNotification('Nothing to interact with', 'info');
             return;
         }
@@ -363,7 +445,6 @@ class Game {
     }
 
     doMeleeAttack(damage, range, aimDot) {
-        // Find all players in range + in front
         const fwd = new THREE.Vector3(-Math.sin(this.playerYaw), 0, -Math.cos(this.playerYaw));
         let hitAny = false;
 
@@ -375,22 +456,18 @@ class Game {
             if (dist > range) return;
             to.normalize();
             const dot = to.dot(fwd);
-            if (dot < aimDot) return; // not in front
+            if (dot < aimDot) return;
 
             this.registerHit(pid, damage);
             hitAny = true;
             this.showNotification(`Hit ${p.data.name} -${damage}`, 'success');
         });
 
-        if (hitAny) {
-            this.spawnHitEffect();
-        } else {
-            this.showNotification('Missed', 'info');
-        }
+        if (hitAny) this.spawnHitEffect();
+        else this.showNotification('Missed', 'info');
     }
 
     spawnHitEffect() {
-        // Flash screen slightly
         const v = document.getElementById('damageVignette');
         if (v) {
             v.style.boxShadow = 'inset 0 0 120px rgba(255,200,50,0.5)';
@@ -399,7 +476,6 @@ class Game {
     }
 
     updateCooldownUI() {
-        // Update cooldown overlays on all action buttons
         const map = {
             punchBtn: 'Punch_Left',
             kickBtn: 'Kick_Left',
@@ -426,7 +502,6 @@ class Game {
         });
     }
 
-    // ============ UI ============
     setupKillFeed() {
         if (!document.getElementById('killFeed')) {
             const el = document.createElement('div');
@@ -477,7 +552,6 @@ class Game {
         setTimeout(() => el.remove(), 2500);
     }
 
-    // ============ ACTIONS MENU ============
     buildAnimMenu() {
         const grid = document.getElementById('animMenuGrid');
         if (!grid) return;
@@ -508,7 +582,6 @@ class Game {
         if (m) m.classList.remove('open');
     }
 
-    // ============ SCENE ============
     setupLighting() {
         this.scene.add(new THREE.AmbientLight(0x606080, 0.8));
         const sun = new THREE.DirectionalLight(0xffeedd, 1.4);
@@ -544,6 +617,50 @@ class Game {
     }
 
     createRealisticBuildings() {
+        const loader = new GLTFLoader();
+        const positions = [
+            {x:-15,z:-15},{x:15,z:-15},{x:-15,z:15},{x:15,z:15},
+            {x:-25,z:0},{x:25,z:0},{x:0,z:-25},{x:0,z:25},
+            {x:-35,z:-35},{x:35,z:35},{x:-35,z:35},{x:35,z:-35}
+        ];
+
+        positions.forEach((pos, i) => {
+            const file = KENNEY_BUILDINGS[i % KENNEY_BUILDINGS.length];
+            loader.load(file, (gltf) => {
+                const b = gltf.scene;
+                b.position.set(pos.x, 0, pos.z);
+                b.rotation.y = Math.random() * Math.PI * 2;
+                b.traverse(n => {
+                    if (n.isMesh) {
+                        n.castShadow = true;
+                        n.receiveShadow = true;
+                    }
+                });
+                const box = new THREE.Box3().setFromObject(b);
+                const size = box.getSize(new THREE.Vector3());
+                const targetHeight = 12 + Math.random() * 8;
+                if (size.y > 0) {
+                    const scale = targetHeight / size.y;
+                    b.scale.setScalar(scale);
+                    const box2 = new THREE.Box3().setFromObject(b);
+                    b.position.y -= box2.min.y;
+                }
+                this.scene.add(b);
+                this.buildings.push({
+                    mesh: b,
+                    doorPos: new THREE.Vector3(pos.x, 1.2, pos.z + (size.z * 0.6))
+                });
+            }, undefined, () => {
+                this.createDetailedBuilding(
+                    pos.x, pos.z,
+                    8 + Math.random()*4, 8 + Math.random()*4, 6 + Math.random()*4,
+                    [0x8B4513, 0x5D3A1A, 0xA0522D][i % 3]
+                );
+            });
+        });
+    }
+
+    createProceduralBuildings() {
         const colors = [0x8B4513, 0x5D3A1A, 0xA0522D];
         const pos = [
             {x:-15,z:-15},{x:15,z:-15},{x:-15,z:15},{x:15,z:15},
@@ -640,7 +757,10 @@ class Game {
             while (!placed && att < 50) {
                 const x = (Math.random()-0.5)*140, z = (Math.random()-0.5)*140;
                 let close = false;
-                for (const b of this.buildings) if (Math.hypot(x-b.mesh.position.x, z-b.mesh.position.z) < 10) { close = true; break; }
+                for (const b of this.buildings) {
+                    const bp = b.mesh.position;
+                    if (Math.hypot(x-bp.x, z-bp.z) < 10) { close = true; break; }
+                }
                 if (!close) { g.position.set(x, 0, z); placed = true; }
                 att++;
             }
@@ -669,8 +789,13 @@ class Game {
             while (!placed && att < 30) {
                 const x = (Math.random()-0.5)*120, z = (Math.random()-0.5)*120;
                 let close = false;
-                for (const b of this.buildings) if (Math.hypot(x-b.mesh.position.x, z-b.mesh.position.z) < 15) { close = true; break; }
-                for (const c of this.containers) if (Math.hypot(x-c.position.x, z-c.position.z) < 10) { close = true; break; }
+                for (const b of this.buildings) {
+                    const bp = b.mesh.position;
+                    if (Math.hypot(x-bp.x, z-bp.z) < 15) { close = true; break; }
+                }
+                for (const c of this.containers) {
+                    if (Math.hypot(x-c.position.x, z-c.position.z) < 10) { close = true; break; }
+                }
                 if (!close) { g.position.set(x, 0, z); placed = true; }
                 att++;
             }
@@ -696,7 +821,10 @@ class Game {
             while (!placed && att < 30) {
                 const x = (Math.random()-0.5)*130, z = (Math.random()-0.5)*130;
                 let close = false;
-                for (const b of this.buildings) if (Math.hypot(x-b.mesh.position.x, z-b.mesh.position.z) < 8) { close = true; break; }
+                for (const b of this.buildings) {
+                    const bp = b.mesh.position;
+                    if (Math.hypot(x-bp.x, z-bp.z) < 8) { close = true; break; }
+                }
                 if (!close) { g.position.set(x, 0, z); placed = true; }
                 att++;
             }
@@ -743,6 +871,7 @@ class Game {
         if (!this.gameActive || this.insideBuilding) return;
         let found = null, minD = 4;
         this.buildings.forEach(b => {
+            if (!b.doorPos) return;
             const d = this.playerPos.distanceTo(b.doorPos);
             if (d < minD) { minD = d; found = b; }
         });
@@ -828,44 +957,47 @@ class Game {
         swipeZone.addEventListener('touchend', e => { e.preventDefault(); this.swipeTouchId = null; });
 
         const shootBtn = document.getElementById('shootBtn');
-        if (shootBtn) shootBtn.addEventListener('touchstart', e => {
-            e.preventDefault();
+        const shootHandler = (e) => {
+            if (e) e.preventDefault();
             if (!this.gameActive) return;
             if (this.insideBuilding) this.exitBuilding();
             else { this.shoot(); playGunSound(); }
-        });
-        if (shootBtn) shootBtn.addEventListener('click', e => {
-            e.preventDefault();
-            if (!this.gameActive) return;
-            if (this.insideBuilding) this.exitBuilding();
-            else { this.shoot(); playGunSound(); }
-        });
+        };
+        if (shootBtn) {
+            shootBtn.addEventListener('touchstart', shootHandler);
+            shootBtn.addEventListener('click', shootHandler);
+        }
 
         const reloadBtn = document.getElementById('reloadBtn');
-        if (reloadBtn) reloadBtn.addEventListener('touchstart', e => { e.preventDefault(); this.reload(); });
-        if (reloadBtn) reloadBtn.addEventListener('click', e => { e.preventDefault(); this.reload(); });
+        if (reloadBtn) {
+            const h = (e) => { e.preventDefault(); this.reload(); };
+            reloadBtn.addEventListener('touchstart', h);
+            reloadBtn.addEventListener('click', h);
+        }
 
-        // Quick action buttons
         const bindAction = (id, action) => {
             const el = document.getElementById(id);
             if (!el) return;
-            el.addEventListener('touchstart', e => { e.preventDefault(); this.triggerAction(action); });
-            el.addEventListener('click', e => { e.preventDefault(); this.triggerAction(action); });
+            const h = (e) => { e.preventDefault(); this.triggerAction(action); };
+            el.addEventListener('touchstart', h);
+            el.addEventListener('click', h);
         };
         bindAction('punchBtn', 'Punch_Left');
         bindAction('kickBtn', 'Kick_Left');
         bindAction('rollBtn', 'Roll');
         bindAction('waveBtn', 'Wave');
 
-        // Actions menu
         const actionsBtn = document.getElementById('actionsBtn');
-        if (actionsBtn) actionsBtn.addEventListener('click', e => { e.preventDefault(); this.openAnimMenu(); });
+        if (actionsBtn) {
+            const h = (e) => { e.preventDefault(); this.openAnimMenu(); };
+            actionsBtn.addEventListener('click', h);
+            actionsBtn.addEventListener('touchstart', h);
+        }
         const closeBtn = document.getElementById('animMenuClose');
         if (closeBtn) closeBtn.addEventListener('click', () => this.closeAnimMenu());
         const menuBg = document.getElementById('animMenu');
         if (menuBg) menuBg.addEventListener('click', e => { if (e.target === menuBg) this.closeAnimMenu(); });
 
-        // Start / restart
         const startBtn = document.getElementById('startBtn');
         if (startBtn) startBtn.addEventListener('click', () => {
             const i = document.getElementById('instructions');
@@ -909,8 +1041,9 @@ class Game {
 
         ctx.fillStyle = '#8B4513';
         this.buildings.forEach(b => {
-            const x = (b.mesh.position.x + 75) * 1.5;
-            const z = (b.mesh.position.z + 75) * 1.5;
+            const bp = b.mesh.position;
+            const x = (bp.x + 75) * 1.5;
+            const z = (bp.z + 75) * 1.5;
             if (x > 0 && x < canvas.width && z > 0 && z < canvas.height) ctx.fillRect(x-4, z-4, 8, 8);
         });
         ctx.fillStyle = '#3366cc';
@@ -969,9 +1102,7 @@ class Game {
         this.updateUI();
         this._shootFlashUntil = Date.now() + 250;
 
-        if (this.localPlayer) {
-            this.playOverride('Gun_Shoot', 300);
-        }
+        if (this.localPlayer) this.playOverride('Gun_Shoot', 300);
         if (this.firebaseReady && this.playerRef) {
             updateDoc(this.playerRef, { ammo: this.ammo }).catch(() => {});
         }
@@ -1024,7 +1155,6 @@ class Game {
 
     takeDamage(amount, attackerId, attackerName) {
         if (!this.gameActive || this.health <= 0) return;
-        // Roll invulnerability
         if (this.rolling && Date.now() < this.rollUntil) return;
 
         this.health = Math.max(0, this.health - amount);
@@ -1037,9 +1167,7 @@ class Game {
             setTimeout(() => v.classList.remove('active'), 250);
         }
 
-        if (this.localPlayer && this.health > 0) {
-            this.playOverride('HitRecieve', 400);
-        }
+        if (this.localPlayer && this.health > 0) this.playOverride('HitRecieve', 400);
         if (this.firebaseReady && this.playerRef) updateDoc(this.playerRef, { health: this.health }).catch(() => {});
         if (this.health <= 0) this.die();
         else this.showNotification(`-${amount} HP`, 'error');
@@ -1293,7 +1421,6 @@ class Game {
             if (Math.abs(this.moveY) > 0.05) moveDelta.addScaledVector(forwardDir, this.moveY * this.moveSpeed);
             if (Math.abs(this.moveX) > 0.05) moveDelta.addScaledVector(rightDir, this.moveX * this.moveSpeed);
 
-            // Roll dodge movement
             if (this.rolling && now < this.rollUntil) {
                 moveDelta.addScaledVector(this.rollDirection, 0.4);
             } else if (this.rolling) {
