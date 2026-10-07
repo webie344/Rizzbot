@@ -24,6 +24,23 @@ try {
     db = getFirestore(app);
 } catch (e) { console.error('Firebase init:', e); }
 
+// ============ WORLD CONSTANTS ============
+const MAP_HALF = 200;
+const FOG_NEAR = 200;
+const FOG_FAR = 500;
+const BUILD_COLS = 10;
+const BUILD_ROWS = 8;
+const BUILD_SPACING_X = 38;
+const BUILD_SPACING_Z = 42;
+const RAMP_COUNT = 24;
+const PLAYER_RADIUS = 0.4;
+
+const NORMAL_FOV = 70;
+const ZOOM_FOV = 35;
+const NORMAL_CAM_DIST = 6.5;
+const ZOOM_CAM_DIST = 2.8;
+const ZOOM_AUTO_RESET_MS = 2000;
+
 // ============ GUN SOUND ============
 function playGunSound() {
     try {
@@ -50,21 +67,21 @@ function createGunSound(ctx) {
     } catch (e) {}
 }
 
-// ============ SVG ICON LIBRARY ============
+// ============ SVG ICONS ============
 const SVG_ICONS = {
     punch: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 20h12a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2h-1V8a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2v5H6a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2z"/><path d="M9 8V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v3"/></svg>`,
     kick: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l6-4 6 2 4-6"/><path d="M10 16l-2-8 4-2 2 6"/><circle cx="13" cy="4" r="2"/></svg>`,
     roll: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9"/><polyline points="3 4 3 12 11 12"/></svg>`,
     wave: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 11V7a1.5 1.5 0 0 1 3 0v4"/><path d="M10 11V5a1.5 1.5 0 0 1 3 0v6"/><path d="M13 11V6a1.5 1.5 0 0 1 3 0v7"/><path d="M16 11V9a1.5 1.5 0 0 1 3 0v7a7 7 0 0 1-7 7h-1a7 7 0 0 1-7-7v-2l-1-2"/></svg>`,
-    sword: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"/><line x1="13" y1="19" x2="19" y2="13"/><line x1="16" y1="16" x2="20" y2="20"/><line x1="19" y1="21" x2="21" y2="19"/></svg>`,
+    sword: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"/><line x1="13" y1="19" x2="19" y2="13"/><line x1="16" y1="16" x2="20" y2="20"/></svg>`,
     interact: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
-    shoot: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="5" y1="5" x2="8" y2="8"/><line x1="16" y1="16" x2="19" y2="19"/><line x1="19" y1="5" x2="16" y2="8"/><line x1="8" y1="16" x2="5" y2="19"/></svg>`,
+    shoot: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg>`,
     reload: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"/><path d="M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>`,
     bolt: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,
+    zoom: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>`,
     close: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`
 };
 
-// ============ REAL ACTIONS ============
 const REAL_ACTIONS = [
     { name: 'Punch_Left',   icon: 'punch',    label: 'Punch L',   desc: '40 dmg' },
     { name: 'Punch_Right',  icon: 'punch',    label: 'Punch R',   desc: '40 dmg' },
@@ -84,7 +101,6 @@ const MELEE = {
     Sword_Slash: { damage: 75, range: 2.6, cooldown: 600,  aimDot: 0.3 }
 };
 
-// ============ KENNEY BUILDINGS (all 38) ============
 const KENNEY_BUILDINGS = [
     'building-a.glb','building-b.glb','building-c.glb','building-d.glb',
     'building-e.glb','building-f.glb','building-g.glb','building-h.glb',
@@ -99,10 +115,14 @@ const KENNEY_BUILDINGS = [
     'water-tower.glb','windmill.glb','windmill-low.glb'
 ];
 
+// ============================================================
+//                     THE GAME
+// ============================================================
 class Game {
     constructor() {
-        console.log('🎮 CODM-STYLE - FULL UPDATE');
+        console.log('🎮 CODM-STYLE CITY WARZONE');
 
+        // Firebase
         this.currentUser = null;
         this.playerId = null;
         this.playerName = 'Player_' + Math.floor(Math.random() * 10000);
@@ -113,28 +133,45 @@ class Game {
         this.heartbeatInterval = null;
         this.firebaseReady = false;
 
+        // GLB
         this.glbBase = null;
         this.glbAnimations = {};
         this.glbLoaded = false;
         this.handBoneName = null;
 
+        // Local player
         this.localPlayer = null;
+
+        // Other players
         this.otherPlayers = new Map();
+
         this.lastUpdateTime = Date.now();
 
+        // Action override
         this.overrideAnim = null;
         this.overrideUntil = 0;
-
         this.cooldowns = {};
         this.rolling = false;
         this.rollUntil = 0;
         this.rollDirection = new THREE.Vector3();
 
+        // Zoom
+        this.zoomed = false;
+        this.lastShootTime = 0;
+        this.currentFov = NORMAL_FOV;
+        this.currentCamDist = NORMAL_CAM_DIST;
+
+        // Vertical physics
+        this.velocityY = 0;
+        this.onGround = true;
+        this.playerY = 0;
+
+        // Scene
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(0x87CEEB);
-        this.scene.fog = new THREE.Fog(0x87CEEB, 80, 250);
+        this.scene.fog = new THREE.Fog(0x87CEEB, FOG_NEAR, FOG_FAR);
 
-        this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+        this.camera = new THREE.PerspectiveCamera(NORMAL_FOV, window.innerWidth / window.innerHeight, 0.1, 1200);
 
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -145,6 +182,7 @@ class Game {
         if (cont) cont.appendChild(this.renderer.domElement);
         else document.body.appendChild(this.renderer.domElement);
 
+        // State
         this.health = 100;
         this.maxHealth = 100;
         this.damagePerShot = 33;
@@ -156,54 +194,59 @@ class Game {
         this.gameActive = false;
         this._shootFlashUntil = 0;
 
-        // Camera
-        this.camDist = 6.5;
+        // Camera follow params
         this.camHeight = 3.2;
         this.camLookHeight = 1.1;
 
-        this.playerPos = new THREE.Vector3(0, 0, 15);
+        // Player position
+        this.playerPos = new THREE.Vector3(0, 0, 30);
         this.playerYaw = 0;
         this.lookPitch = 0;
 
-        // ===== FASTER MOVEMENT (CODM speed) =====
-        // Base walk: 0.22 (was 0.14). Sprint multiplier applied later.
-        this.walkSpeed = 0.22;
-        this.sprintMultiplier = 1.7;      // sprint ~ 0.37
-        this.strafeMultiplier = 0.85;     // sideways slightly slower
-        this.backwardMultiplier = 0.75;   // backward slowest
-        this.rollSpeed = 0.65;            // dodge dash
+        // Movement (arcade snappy)
+        this.walkSpeed = 0.25;
+        this.sprintMultiplier = 1.7;
+        this.strafeMultiplier = 0.85;
+        this.backwardMultiplier = 0.75;
+        this.rollSpeed = 0.7;
         this.moveX = 0;
         this.moveY = 0;
-        this.moveSpeed = 0.22;
         this.footstepTime = 0;
         this.touchSensitivity = 0.006;
 
+        // Joystick
         this.joystickActive = false;
         this.joystickTouchId = null;
         this.joystickMaxMove = 40;
         this.joystickThumb = document.getElementById('joystickThumb');
         this.joystickContainer = document.getElementById('joystickContainer');
 
+        // Swipe
         this.swipeTouchId = null;
         this.lastSwipeX = 0;
         this.lastSwipeY = 0;
 
-        this.buildings = [];
+        // World objects
+        this.buildings = [];     // { mesh, collider: Box3, doorPos, topY }
+        this.ramps = [];         // { mesh, collider: Box3, topY }
         this.containers = [];
         this.oilBunkers = [];
         this.ammoBoxes = [];
         this.trees = [];
+
         this.nearbyDoor = null;
         this.insideBuilding = false;
         this.currentBuilding = null;
 
+        // Build the world
         this.setupLighting();
         this.setupGround();
         this.createRealisticBuildings();
-        this.createContainers(80);
-        this.createOilBunkers(15);
+        this.createRamps();
+        this.createContainers(60);
+        this.createOilBunkers(20);
         this.createSimpleEnvironment();
-        this.spawnInitialAmmoBoxes(30);
+        this.spawnInitialAmmoBoxes(40);
         this.setupControls();
         this.setupMinimap();
         this.buildAnimMenu();
@@ -232,16 +275,11 @@ class Game {
         window.addEventListener('beforeunload', () => this.cleanup());
     }
 
-    // ============ SVG ICON INJECTION ============
+    // ============ SVG INJECTION ============
     injectSVGIcons() {
         const map = {
-            punchBtn: 'punch',
-            kickBtn: 'kick',
-            rollBtn: 'roll',
-            waveBtn: 'wave',
-            shootBtn: 'shoot',
-            reloadBtn: 'reload',
-            actionsBtn: 'bolt',
+            punchBtn: 'punch', kickBtn: 'kick', rollBtn: 'roll', waveBtn: 'wave',
+            shootBtn: 'shoot', reloadBtn: 'reload', actionsBtn: 'bolt',
             animMenuClose: 'close'
         };
         Object.entries(map).forEach(([id, iconKey]) => {
@@ -249,6 +287,19 @@ class Game {
             if (!el) return;
             el.innerHTML = `<span class="svg-icon">${SVG_ICONS[iconKey]}</span>`;
         });
+
+        // Create zoom button dynamically if not in HTML
+        if (!document.getElementById('zoomBtn')) {
+            const zoomBtn = document.createElement('div');
+            zoomBtn.id = 'zoomBtn';
+            zoomBtn.className = 'action-btn';
+            zoomBtn.innerHTML = `<span class="svg-icon">${SVG_ICONS.zoom}</span>`;
+            const actionsContainer = document.getElementById('actionButtons');
+            if (actionsContainer) actionsContainer.appendChild(zoomBtn);
+
+            zoomBtn.addEventListener('click', (e) => { e.preventDefault(); this.toggleZoom(); });
+            zoomBtn.addEventListener('touchstart', (e) => { e.preventDefault(); this.toggleZoom(); });
+        }
     }
 
     // ============ GLB SOLDIER ============
@@ -259,15 +310,9 @@ class Game {
                 (gltf) => {
                     this.glbBase = gltf.scene;
                     this.glbBase.traverse(n => {
-                        if (n.isMesh) {
-                            n.castShadow = true;
-                            n.receiveShadow = true;
-                            n.frustumCulled = false;
-                        }
+                        if (n.isMesh) { n.castShadow = true; n.receiveShadow = true; n.frustumCulled = false; }
                     });
-                    gltf.animations.forEach(clip => {
-                        this.glbAnimations[clip.name] = clip;
-                    });
+                    gltf.animations.forEach(clip => { this.glbAnimations[clip.name] = clip; });
                     console.log('✅ Soldier.glb loaded. Anims:', Object.keys(this.glbAnimations).length);
                     this.glbLoaded = true;
                     resolve();
@@ -285,26 +330,16 @@ class Game {
         const darkGrey = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.6 });
 
         const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.4, 8), black);
-        barrel.rotation.x = Math.PI / 2;
-        barrel.position.set(0, 0.02, 0.2);
-        barrel.castShadow = true;
+        barrel.rotation.x = Math.PI / 2; barrel.position.set(0, 0.02, 0.2); barrel.castShadow = true;
         gun.add(barrel);
 
         const slide = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.07, 0.3), black);
-        slide.position.set(0, 0.03, 0.1);
-        slide.castShadow = true;
+        slide.position.set(0, 0.03, 0.1); slide.castShadow = true;
         gun.add(slide);
 
         const grip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.14, 0.1), darkGrey);
-        grip.position.set(0, -0.08, -0.02);
-        grip.rotation.x = 0.25;
-        grip.castShadow = true;
+        grip.position.set(0, -0.08, -0.02); grip.rotation.x = 0.25; grip.castShadow = true;
         gun.add(grip);
-
-        const guard = new THREE.Mesh(new THREE.TorusGeometry(0.04, 0.008, 4, 8, Math.PI), darkGrey);
-        guard.rotation.x = -Math.PI / 2;
-        guard.position.set(0, -0.03, 0.06);
-        gun.add(guard);
 
         const muzzle = new THREE.Mesh(
             new THREE.SphereGeometry(0.02, 6),
@@ -313,10 +348,10 @@ class Game {
         muzzle.position.set(0, 0.02, 0.42);
         gun.add(muzzle);
 
-        gun.scale.setScalar(1.0);
         return gun;
     }
 
+    // ============ PLAYER INSTANCE ============
     createInstance() {
         if (!this.glbLoaded) return null;
         const model = SkeletonUtils.clone(this.glbBase);
@@ -325,32 +360,26 @@ class Game {
         group.add(model);
         model.scale.setScalar(1.163);
 
+        // Find hand bone
         let handBone = null;
         model.traverse((node) => {
             if (node.isBone) {
                 const name = node.name.toLowerCase();
-                if (name.includes('righthand') || name.includes('right_hand') || name.includes('hand_r') || name === 'mixamorig:righthand') {
+                if (name.includes('righthand') || name.includes('right_hand') || name.includes('hand_r')) {
                     handBone = node;
                 }
             }
         });
-
-        if (!handBone) {
-            if (!this.handBoneName) {
-                const bones = [];
-                model.traverse((n) => { if (n.isBone) bones.push(n.name); });
-                console.log('❌ No right hand bone found. Bone names:', bones.join(', '));
-                this.handBoneName = 'NONE';
-            }
-        } else {
-            if (!this.handBoneName) {
-                console.log('✅ Found hand bone:', handBone.name);
-                this.handBoneName = handBone.name;
-            }
+        if (handBone) {
+            if (!this.handBoneName) console.log('✅ Hand bone:', handBone.name);
+            this.handBoneName = handBone.name;
             const gun = this.createProceduralGun();
-            gun.position.set(0, 0, 0);
-            gun.rotation.set(0, 0, 0);
             handBone.add(gun);
+        } else if (!this.handBoneName) {
+            const bones = [];
+            model.traverse((n) => { if (n.isBone) bones.push(n.name); });
+            console.log('❌ No hand bone. Names:', bones.join(', '));
+            this.handBoneName = 'NONE';
         }
 
         const mixer = new THREE.AnimationMixer(model);
@@ -397,17 +426,372 @@ class Game {
         p.currentActionName = name;
     }
 
-    // ============ ACTION SYSTEM ============
+    // ============ ZOOM ============
+    toggleZoom() {
+        this.zoomed = !this.zoomed;
+        const btn = document.getElementById('zoomBtn');
+        if (btn) btn.classList.toggle('active', this.zoomed);
+    }
+
+    // ============ COLLISION ============
+    // Arcade per-axis collision against building + ramp boxes.
+    // Returns true if the position is free (not inside any box).
+    isFree(x, z, feetY, headY, ignoredBox) {
+        for (const b of this.buildings) {
+            const c = b.collider;
+            if (c === ignoredBox) continue;
+            if (x + PLAYER_RADIUS < c.min.x || x - PLAYER_RADIUS > c.max.x) continue;
+            if (z + PLAYER_RADIUS < c.min.z || z - PLAYER_RADIUS > c.max.z) continue;
+            // Y overlap check: player body from feetY to headY
+            if (headY < c.min.y) continue;   // we're below the building
+            if (feetY > c.max.y - 0.05) continue; // we're above it (walking on roof)
+            return false;
+        }
+        // Ramps are treated as walkable — we don't block horizontal movement on them,
+        // we adjust Y based on the ramp surface (see getGroundY).
+        return true;
+    }
+
+    // Get the walkable surface Y at (x, z).
+    // Checks building tops and ramp surfaces, returns the highest surface below player.
+    getGroundY(x, z, currentY) {
+        let best = 0; // ground level
+
+        // Building tops
+        for (const b of this.buildings) {
+            const c = b.collider;
+            if (x + PLAYER_RADIUS < c.min.x || x - PLAYER_RADIUS > c.max.x) continue;
+            if (z + PLAYER_RADIUS < c.min.z || z - PLAYER_RADIUS > c.max.z) continue;
+            if (c.max.y > best && c.max.y <= currentY + 0.5) {
+                best = c.max.y;
+            }
+        }
+
+        // Ramp surfaces — check if within ramp footprint, compute sloped Y
+        for (const r of this.ramps) {
+            const c = r.collider;
+            if (x < c.min.x || x > c.max.x || z < c.min.z || z > c.max.z) continue;
+            // Ramp slopes along its local direction. Compute Y from position within box.
+            const t = r.computeSurfaceY(x, z);
+            if (t > best && t <= currentY + 0.6) best = t;
+        }
+
+        return best;
+    }
+
+    // ============ WORLD BUILD ============
+    setupLighting() {
+        this.scene.add(new THREE.AmbientLight(0x606080, 0.9));
+        const sun = new THREE.DirectionalLight(0xffeedd, 1.4);
+        sun.position.set(80, 120, 80);
+        sun.castShadow = true;
+        sun.shadow.mapSize.set(2048, 2048);
+        sun.shadow.camera.left = -120;
+        sun.shadow.camera.right = 120;
+        sun.shadow.camera.top = 120;
+        sun.shadow.camera.bottom = -120;
+        sun.shadow.camera.far = 400;
+        this.scene.add(sun);
+        const fill = new THREE.DirectionalLight(0x88aacc, 0.7);
+        fill.position.set(-60, 40, -80);
+        this.scene.add(fill);
+    }
+
+    setupGround() {
+        const g = new THREE.Mesh(
+            new THREE.PlaneGeometry(MAP_HALF * 2, MAP_HALF * 2),
+            new THREE.MeshStandardMaterial({ color: 0x3a7e3a, roughness: 0.85 })
+        );
+        g.rotation.x = -Math.PI / 2;
+        g.receiveShadow = true;
+        this.scene.add(g);
+
+        // Streets — a cross grid
+        const roadMat = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.9 });
+        for (let i = 0; i <= BUILD_COLS; i++) {
+            const x = -((BUILD_COLS - 1) * BUILD_SPACING_X) / 2 + i * BUILD_SPACING_X - BUILD_SPACING_X / 2;
+            const road = new THREE.Mesh(new THREE.PlaneGeometry(6, MAP_HALF * 2), roadMat);
+            road.rotation.x = -Math.PI / 2;
+            road.position.set(x, 0.01, 0);
+            road.receiveShadow = true;
+            this.scene.add(road);
+        }
+        for (let i = 0; i <= BUILD_ROWS; i++) {
+            const z = -((BUILD_ROWS - 1) * BUILD_SPACING_Z) / 2 + i * BUILD_SPACING_Z - BUILD_SPACING_Z / 2;
+            const road = new THREE.Mesh(new THREE.PlaneGeometry(MAP_HALF * 2, 6), roadMat);
+            road.rotation.x = -Math.PI / 2;
+            road.position.set(0, 0.01, z);
+            road.receiveShadow = true;
+            this.scene.add(road);
+        }
+
+        // Grass patches
+        for (let i = 0; i < 150; i++) {
+            const p = new THREE.Mesh(
+                new THREE.CircleGeometry(2 + Math.random() * 4, 6),
+                new THREE.MeshStandardMaterial({ color: 0x4a8e4a })
+            );
+            p.rotation.x = -Math.PI / 2;
+            p.position.set((Math.random() - 0.5) * MAP_HALF * 1.9, 0.02, (Math.random() - 0.5) * MAP_HALF * 1.9);
+            p.receiveShadow = true;
+            this.scene.add(p);
+        }
+    }
+
+    // ============ BUILDINGS ============
+    createRealisticBuildings() {
+        const loader = new GLTFLoader();
+        const offsetX = -((BUILD_COLS - 1) * BUILD_SPACING_X) / 2;
+        const offsetZ = -((BUILD_ROWS - 1) * BUILD_SPACING_Z) / 2;
+
+        for (let r = 0; r < BUILD_ROWS; r++) {
+            for (let c = 0; c < BUILD_COLS; c++) {
+                const x = offsetX + c * BUILD_SPACING_X + (Math.random() - 0.5) * 8;
+                const z = offsetZ + r * BUILD_SPACING_Z + (Math.random() - 0.5) * 8;
+                const file = KENNEY_BUILDINGS[(r * BUILD_COLS + c) % KENNEY_BUILDINGS.length];
+
+                loader.load(file, (gltf) => {
+                    const b = gltf.scene;
+                    b.position.set(x, 0, z);
+                    b.rotation.y = Math.floor(Math.random() * 4) * (Math.PI / 2);
+                    b.traverse(n => { if (n.isMesh) { n.castShadow = true; n.receiveShadow = true; } });
+
+                    // Scale to a target height
+                    const rawBox = new THREE.Box3().setFromObject(b);
+                    const rawSize = rawBox.getSize(new THREE.Vector3());
+                    const targetHeight = 10 + Math.random() * 10;
+                    if (rawSize.y > 0) {
+                        const scale = targetHeight / rawSize.y;
+                        b.scale.setScalar(scale);
+                        const box2 = new THREE.Box3().setFromObject(b);
+                        b.position.y -= box2.min.y;
+                    }
+
+                    // Recompute the collider after scaling
+                    const box3 = new THREE.Box3().setFromObject(b);
+                    const size = box3.getSize(new THREE.Vector3());
+
+                    this.scene.add(b);
+                    this.buildings.push({
+                        mesh: b,
+                        collider: box3.clone(),
+                        doorPos: new THREE.Vector3(x, 1.2, z + size.z * 0.55),
+                        topY: box3.max.y
+                    });
+                }, undefined, () => {
+                    // Silent fail — no fallback
+                });
+            }
+        }
+        console.log(`🏢 Loading ${BUILD_COLS * BUILD_ROWS} buildings`);
+    }
+
+    // ============ RAMPS ============
+    createRamps() {
+        const woodMat = new THREE.MeshStandardMaterial({ color: 0x8B5A2B, roughness: 0.85 });
+        let placed = 0;
+        let attempts = 0;
+
+        while (placed < RAMP_COUNT && attempts < 400) {
+            attempts++;
+            // Pick a random building to attach the ramp to
+            if (this.buildings.length === 0) break;
+            const b = this.buildings[Math.floor(Math.random() * this.buildings.length)];
+            const bx = b.collider.min.x + (b.collider.max.x - b.collider.min.x) * (Math.random() > 0.5 ? -0.7 : 1.7);
+            const bz = b.collider.min.z + (b.collider.max.z - b.collider.min.z) * (Math.random() > 0.5 ? -0.7 : 1.7);
+
+            const rampLength = 10;
+            const rampWidth = 3;
+            const rampHeight = Math.min(6, b.topY);
+
+            const box = new THREE.BoxGeometry(rampLength, 0.4, rampWidth);
+            const ramp = new THREE.Mesh(box, woodMat);
+
+            // Rotate so it slopes: rotate around Z axis by 20 degrees
+            const angle = Math.atan2(rampHeight, rampLength);
+            ramp.rotation.z = -angle;
+            ramp.position.set(bx, rampHeight / 2, bz);
+            ramp.castShadow = true;
+            ramp.receiveShadow = true;
+
+            this.scene.add(ramp);
+
+            // Approximate ramp collider — we DON'T block movement, but we do
+            // need to know the ramp surface. Store a computeSurfaceY function.
+            const localMinX = -rampLength / 2;
+            const localMaxX = rampLength / 2;
+
+            this.ramps.push({
+                mesh: ramp,
+                collider: new THREE.Box3(
+                    new THREE.Vector3(bx - rampLength / 2, 0, bz - rampWidth / 2),
+                    new THREE.Vector3(bx + rampLength / 2, rampHeight, bz + rampWidth / 2)
+                ),
+                computeSurfaceY: (px, pz) => {
+                    // Linear interpolation along X axis from 0 at minX to rampHeight at maxX
+                    const t = (px - (bx - rampLength / 2)) / rampLength;
+                    return Math.max(0, Math.min(rampHeight, t * rampHeight));
+                }
+            });
+            placed++;
+        }
+        console.log(`🪜 Placed ${placed} ramps`);
+    }
+
+    // ============ CONTAINERS / BUNKERS / TREES ============
+    createContainers(count) {
+        const colors = [0x3366cc, 0xcc3333, 0x33cc33, 0xcccc33, 0xcc33cc, 0x888888];
+        for (let i = 0; i < count; i++) {
+            const g = new THREE.Group();
+            const w = 2.5 + Math.random() * 1.5;
+            const h = 2.5 + Math.random() * 1;
+            const d = 6 + Math.random() * 2;
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            const body = new THREE.Mesh(
+                new THREE.BoxGeometry(w, h, d),
+                new THREE.MeshStandardMaterial({ color, roughness: 0.6 })
+            );
+            body.position.y = h / 2;
+            body.castShadow = body.receiveShadow = true;
+            g.add(body);
+            g.rotation.y = Math.random() * Math.PI * 2;
+
+            let placed = false, att = 0;
+            while (!placed && att < 40) {
+                const x = (Math.random() - 0.5) * (MAP_HALF * 1.8);
+                const z = (Math.random() - 0.5) * (MAP_HALF * 1.8);
+                let close = false;
+                for (const b of this.buildings) {
+                    const bp = b.mesh.position;
+                    if (Math.hypot(x - bp.x, z - bp.z) < 8) { close = true; break; }
+                }
+                if (!close) { g.position.set(x, 0, z); placed = true; }
+                att++;
+            }
+            if (placed) { this.scene.add(g); this.containers.push(g); }
+        }
+    }
+
+    createOilBunkers(count) {
+        for (let i = 0; i < count; i++) {
+            const g = new THREE.Group();
+            const tank = new THREE.Mesh(
+                new THREE.CylinderGeometry(4, 4, 6, 16),
+                new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.6, roughness: 0.4 })
+            );
+            tank.position.y = 3;
+            tank.castShadow = tank.receiveShadow = true;
+            g.add(tank);
+            const dome = new THREE.Mesh(
+                new THREE.SphereGeometry(3.8, 16, 8),
+                new THREE.MeshStandardMaterial({ color: 0xaaaaaa, metalness: 0.7, roughness: 0.3 })
+            );
+            dome.position.y = 6;
+            dome.scale.set(1, 0.35, 1);
+            dome.castShadow = true;
+            g.add(dome);
+
+            let placed = false, att = 0;
+            while (!placed && att < 30) {
+                const x = (Math.random() - 0.5) * (MAP_HALF * 1.7);
+                const z = (Math.random() - 0.5) * (MAP_HALF * 1.7);
+                let close = false;
+                for (const b of this.buildings) {
+                    const bp = b.mesh.position;
+                    if (Math.hypot(x - bp.x, z - bp.z) < 12) { close = true; break; }
+                }
+                if (!close) { g.position.set(x, 0, z); placed = true; }
+                att++;
+            }
+            if (placed) { this.scene.add(g); this.oilBunkers.push(g); }
+        }
+    }
+
+    createSimpleEnvironment() {
+        for (let i = 0; i < 60; i++) {
+            const g = new THREE.Group();
+            const trunk = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.5, 0.7, 3),
+                new THREE.MeshStandardMaterial({ color: 0x8B5A2B })
+            );
+            trunk.position.y = 1.5;
+            trunk.castShadow = true;
+            g.add(trunk);
+            const lm = new THREE.MeshStandardMaterial({ color: 0x2a8a2a });
+            for (let l = 0; l < 3; l++) {
+                const leaf = new THREE.Mesh(new THREE.ConeGeometry(1.5 - l * 0.3, 1.8 - l * 0.3, 6), lm);
+                leaf.position.y = 3.2 + l * 1.0;
+                leaf.castShadow = true;
+                g.add(leaf);
+            }
+
+            let placed = false, att = 0;
+            while (!placed && att < 30) {
+                const x = (Math.random() - 0.5) * (MAP_HALF * 1.85);
+                const z = (Math.random() - 0.5) * (MAP_HALF * 1.85);
+                let close = false;
+                for (const b of this.buildings) {
+                    const bp = b.mesh.position;
+                    if (Math.hypot(x - bp.x, z - bp.z) < 7) { close = true; break; }
+                }
+                if (!close) { g.position.set(x, 0, z); placed = true; }
+                att++;
+            }
+            if (placed) { this.scene.add(g); this.trees.push(g); }
+        }
+    }
+
+    spawnInitialAmmoBoxes(count) {
+        for (let i = 0; i < count; i++) {
+            this.spawnAmmoBox(
+                (Math.random() - 0.5) * (MAP_HALF * 1.6),
+                0.5,
+                (Math.random() - 0.5) * (MAP_HALF * 1.6),
+                5 + Math.floor(Math.random() * 10)
+            );
+        }
+    }
+
+    spawnAmmoBox(x, y, z, ammo = 10) {
+        const b = new THREE.Mesh(
+            new THREE.BoxGeometry(0.8, 0.8, 0.8),
+            new THREE.MeshStandardMaterial({ color: 0xffaa00, emissive: 0x442200, transparent: true, opacity: 0.9 })
+        );
+        b.position.set(x, y, z);
+        b.castShadow = true;
+        b.userData = { ammo };
+        this.scene.add(b);
+        this.ammoBoxes.push(b);
+        return b;
+    }
+
+    spawnAmmoBoxOnDeath(pos, ammo = 20) {
+        this.spawnAmmoBox(pos.x, 0.5, pos.z, ammo);
+    }
+
+    checkNearbyDoors() {
+        if (!this.gameActive) return;
+        let found = null, minD = 4;
+        this.buildings.forEach(b => {
+            if (!b.doorPos) return;
+            const d = this.playerPos.distanceTo(b.doorPos);
+            if (d < minD) { minD = d; found = b; }
+        });
+        if (found !== this.nearbyDoor) {
+            this.nearbyDoor = found;
+            const el = document.getElementById('doorIndicator');
+            if (el) el.style.display = found ? 'block' : 'none';
+        }
+    }
+
+    // ============ ACTIONS ============
     isOnCooldown(actionName) {
         return (this.cooldowns[actionName] || 0) > Date.now();
     }
 
     triggerAction(actionName) {
         if (!this.gameActive) return;
-        if (this.isOnCooldown(actionName)) {
-            this.showNotification('Cooldown', 'info');
-            return;
-        }
+        if (this.isOnCooldown(actionName)) { this.showNotification('Cooldown', 'info'); return; }
         if (!this.localPlayer) return;
 
         if (MELEE[actionName]) {
@@ -417,7 +801,6 @@ class Game {
             this.doMeleeAttack(cfg.damage, cfg.range, cfg.aimDot);
             return;
         }
-
         if (actionName === 'Roll') {
             this.cooldowns.Roll = Date.now() + 3000;
             this.playOverride('Roll', 700);
@@ -433,17 +816,16 @@ class Game {
             this.rollDirection.copy(dir);
             return;
         }
-
         if (actionName === 'Wave') {
             this.cooldowns.Wave = Date.now() + 2000;
             this.playOverride('Wave', 1500);
             return;
         }
-
         if (actionName === 'Interact') {
             this.cooldowns.Interact = Date.now() + 500;
             this.playOverride('Interact', 600);
 
+            // Ammo box within 3m
             let nearest = null, nearestDist = 3;
             this.ammoBoxes.forEach(b => {
                 const d = this.playerPos.distanceTo(b.position);
@@ -460,7 +842,6 @@ class Game {
                 if (this.firebaseReady && this.playerRef) updateDoc(this.playerRef, { ammo: this.ammo }).catch(() => {});
                 return;
             }
-            if (this.nearbyDoor) { this.enterBuilding(this.nearbyDoor); return; }
             this.showNotification('Nothing to interact with', 'info');
             return;
         }
@@ -474,7 +855,6 @@ class Game {
     doMeleeAttack(damage, range, aimDot) {
         const fwd = new THREE.Vector3(-Math.sin(this.playerYaw), 0, -Math.cos(this.playerYaw));
         let hitAny = false;
-
         this.otherPlayers.forEach((p, pid) => {
             if (p.isDead) return;
             const to = p.group.position.clone().sub(this.playerPos);
@@ -482,14 +862,11 @@ class Game {
             const dist = to.length();
             if (dist > range) return;
             to.normalize();
-            const dot = to.dot(fwd);
-            if (dot < aimDot) return;
-
+            if (to.dot(fwd) < aimDot) return;
             this.registerHit(pid, damage);
             hitAny = true;
             this.showNotification(`Hit ${p.data.name} -${damage}`, 'success');
         });
-
         if (hitAny) this.spawnHitEffect();
         else this.showNotification('Missed', 'info');
     }
@@ -503,12 +880,7 @@ class Game {
     }
 
     updateCooldownUI() {
-        const map = {
-            punchBtn: 'Punch_Left',
-            kickBtn: 'Kick_Left',
-            rollBtn: 'Roll',
-            waveBtn: 'Wave'
-        };
+        const map = { punchBtn: 'Punch_Left', kickBtn: 'Kick_Left', rollBtn: 'Roll', waveBtn: 'Wave' };
         Object.entries(map).forEach(([id, action]) => {
             const btn = document.getElementById(id);
             if (!btn) return;
@@ -521,11 +893,7 @@ class Game {
             const cfg = MELEE[action];
             const totalCd = cfg ? cfg.cooldown : (action === 'Roll' ? 3000 : 2000);
             const remaining = (this.cooldowns[action] || 0) - Date.now();
-            if (remaining > 0) {
-                overlay.style.height = Math.min(100, (remaining / totalCd) * 100) + '%';
-            } else {
-                overlay.style.height = '0%';
-            }
+            overlay.style.height = remaining > 0 ? Math.min(100, (remaining / totalCd) * 100) + '%' : '0%';
         });
     }
 
@@ -538,6 +906,7 @@ class Game {
             document.body.appendChild(el);
         }
         this.killFeedElement = document.getElementById('killFeed');
+        this.killMessages = [];
     }
 
     addKillToFeed(killData) {
@@ -568,12 +937,7 @@ class Game {
 
     showNotification(msg, type = 'info') {
         const el = document.createElement('div');
-        el.style.cssText = `
-            position:fixed;top:80px;left:50%;transform:translateX(-50%);
-            background:${type==='error'?'#ff4444':type==='success'?'#44ff44':'#4444ff'};
-            color:white;padding:10px 22px;border-radius:30px;font-family:Arial;font-size:14px;font-weight:bold;
-            z-index:10000;box-shadow:0 4px 20px rgba(0,0,0,0.5);text-shadow:1px 1px 2px black;
-        `;
+        el.style.cssText = `position:fixed;top:80px;left:50%;transform:translateX(-50%);background:${type === 'error' ? '#ff4444' : type === 'success' ? '#44ff44' : '#4444ff'};color:white;padding:10px 22px;border-radius:30px;font-family:Arial;font-size:14px;font-weight:bold;z-index:10000;box-shadow:0 4px 20px rgba(0,0,0,0.5);text-shadow:1px 1px 2px black;`;
         el.textContent = msg;
         document.body.appendChild(el);
         setTimeout(() => el.remove(), 2500);
@@ -586,283 +950,15 @@ class Game {
         REAL_ACTIONS.forEach(a => {
             const item = document.createElement('div');
             item.className = 'anim-item';
-            item.innerHTML = `
-                <div class="anim-icon">${SVG_ICONS[a.icon] || ''}</div>
-                <div class="anim-name">${a.label}</div>
-                <div class="anim-desc">${a.desc}</div>
-            `;
-            item.addEventListener('click', () => {
-                this.triggerAction(a.name);
-                this.closeAnimMenu();
-            });
+            item.innerHTML = `<div class="anim-icon">${SVG_ICONS[a.icon] || ''}</div><div class="anim-name">${a.label}</div><div class="anim-desc">${a.desc}</div>`;
+            item.addEventListener('click', () => { this.triggerAction(a.name); this.closeAnimMenu(); });
             grid.appendChild(item);
         });
     }
+    openAnimMenu() { const m = document.getElementById('animMenu'); if (m) m.classList.add('open'); }
+    closeAnimMenu() { const m = document.getElementById('animMenu'); if (m) m.classList.remove('open'); }
 
-    openAnimMenu() {
-        const m = document.getElementById('animMenu');
-        if (m) m.classList.add('open');
-    }
-
-    closeAnimMenu() {
-        const m = document.getElementById('animMenu');
-        if (m) m.classList.remove('open');
-    }
-
-    // ============ SCENE ============
-    setupLighting() {
-        this.scene.add(new THREE.AmbientLight(0x606080, 0.8));
-        const sun = new THREE.DirectionalLight(0xffeedd, 1.4);
-        sun.position.set(30, 50, 30);
-        sun.castShadow = true;
-        sun.shadow.mapSize.set(2048, 2048);
-        sun.shadow.camera.left = -80; sun.shadow.camera.right = 80;
-        sun.shadow.camera.top = 80; sun.shadow.camera.bottom = -80;
-        this.scene.add(sun);
-        const fill = new THREE.DirectionalLight(0x88aacc, 0.8);
-        fill.position.set(-30, 20, -40);
-        this.scene.add(fill);
-    }
-
-    setupGround() {
-        const g = new THREE.Mesh(
-            new THREE.CircleGeometry(150, 128),
-            new THREE.MeshStandardMaterial({ color: 0x3a7e3a, roughness: 0.8 })
-        );
-        g.rotation.x = -Math.PI / 2;
-        g.receiveShadow = true;
-        this.scene.add(g);
-        for (let i = 0; i < 200; i++) {
-            const p = new THREE.Mesh(
-                new THREE.CircleGeometry(0.8 + Math.random() * 1.5, 5),
-                new THREE.MeshStandardMaterial({ color: 0x4a8e4a })
-            );
-            p.rotation.x = -Math.PI / 2;
-            p.position.set((Math.random()-0.5)*140, 0.01, (Math.random()-0.5)*140);
-            p.receiveShadow = true;
-            this.scene.add(p);
-        }
-    }
-
-    // ============ REALISTIC BUILDINGS - ALL KENNEY, NO PROCEDURAL ============
-    createRealisticBuildings() {
-        const loader = new GLTFLoader();
-
-        // Grid: 6 x 5 = 30 positions spread across the map
-        const positions = [];
-        const cols = 6, rows = 5;
-        const spacingX = 22, spacingZ = 22;
-        const offsetX = -((cols - 1) * spacingX) / 2;
-        const offsetZ = -((rows - 1) * spacingZ) / 2;
-        for (let r = 0; r < rows; r++) {
-            for (let c = 0; c < cols; c++) {
-                positions.push({
-                    x: offsetX + c * spacingX + (Math.random() - 0.5) * 6,
-                    z: offsetZ + r * spacingZ + (Math.random() - 0.5) * 6
-                });
-            }
-        }
-
-        positions.forEach((pos, i) => {
-            const file = KENNEY_BUILDINGS[i % KENNEY_BUILDINGS.length];
-            loader.load(file, (gltf) => {
-                const b = gltf.scene;
-                b.position.set(pos.x, 0, pos.z);
-                b.rotation.y = Math.random() * Math.PI * 2;
-                b.traverse(n => {
-                    if (n.isMesh) {
-                        n.castShadow = true;
-                        n.receiveShadow = true;
-                    }
-                });
-                const box = new THREE.Box3().setFromObject(b);
-                const size = box.getSize(new THREE.Vector3());
-                const targetHeight = 10 + Math.random() * 10;
-                if (size.y > 0) {
-                    const scale = targetHeight / size.y;
-                    b.scale.setScalar(scale);
-                    const box2 = new THREE.Box3().setFromObject(b);
-                    b.position.y -= box2.min.y;
-                }
-                this.scene.add(b);
-                this.buildings.push({
-                    mesh: b,
-                    doorPos: new THREE.Vector3(pos.x, 1.2, pos.z + (size.z * 0.6))
-                });
-            }, undefined, () => {
-                // Silent fail. No procedural fallback.
-            });
-        });
-        console.log(`🏢 Loading ${positions.length} Kenney buildings from ${KENNEY_BUILDINGS.length} unique models`);
-    }
-
-    createContainers(count) {
-        const colors = [0x3366cc, 0xcc3333, 0x33cc33, 0xcccc33, 0xcc33cc, 0x888888];
-        for (let i = 0; i < count; i++) {
-            const g = new THREE.Group();
-            const w = 2.5 + Math.random() * 1.5;
-            const h = 2.5 + Math.random() * 1;
-            const d = 6 + Math.random() * 2;
-            const color = colors[Math.floor(Math.random() * colors.length)];
-            const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.6 });
-            const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
-            body.position.y = h/2;
-            body.castShadow = body.receiveShadow = true; g.add(body);
-
-            const trim = new THREE.MeshStandardMaterial({ color: 0x444444, metalness: 0.5 });
-            [[-w/2,h/2,-d/2],[w/2,h/2,-d/2],[-w/2,h/2,d/2],[w/2,h/2,d/2]].forEach(p => {
-                const c = new THREE.Mesh(new THREE.BoxGeometry(0.2, h, 0.2), trim);
-                c.position.set(p[0], p[1], p[2]); c.castShadow = true; g.add(c);
-            });
-            g.rotation.y = Math.random() * Math.PI * 2;
-
-            let placed = false, att = 0;
-            while (!placed && att < 50) {
-                const x = (Math.random()-0.5)*140, z = (Math.random()-0.5)*140;
-                let close = false;
-                for (const b of this.buildings) {
-                    const bp = b.mesh.position;
-                    if (Math.hypot(x-bp.x, z-bp.z) < 8) { close = true; break; }
-                }
-                if (!close) { g.position.set(x, 0, z); placed = true; }
-                att++;
-            }
-            if (placed) { this.scene.add(g); this.containers.push(g); }
-        }
-    }
-
-    createOilBunkers(count) {
-        for (let i = 0; i < count; i++) {
-            const g = new THREE.Group();
-            const tank = new THREE.Mesh(
-                new THREE.CylinderGeometry(3, 3, 4, 16),
-                new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.6, roughness: 0.4 })
-            );
-            tank.position.y = 2;
-            tank.castShadow = tank.receiveShadow = true; g.add(tank);
-            const dome = new THREE.Mesh(
-                new THREE.SphereGeometry(2.8, 16, 8),
-                new THREE.MeshStandardMaterial({ color: 0xaaaaaa, metalness: 0.7, roughness: 0.3 })
-            );
-            dome.position.y = 4;
-            dome.scale.set(1, 0.3, 1);
-            dome.castShadow = true; g.add(dome);
-
-            let placed = false, att = 0;
-            while (!placed && att < 30) {
-                const x = (Math.random()-0.5)*120, z = (Math.random()-0.5)*120;
-                let close = false;
-                for (const b of this.buildings) {
-                    const bp = b.mesh.position;
-                    if (Math.hypot(x-bp.x, z-bp.z) < 12) { close = true; break; }
-                }
-                for (const c of this.containers) {
-                    if (Math.hypot(x-c.position.x, z-c.position.z) < 8) { close = true; break; }
-                }
-                if (!close) { g.position.set(x, 0, z); placed = true; }
-                att++;
-            }
-            if (placed) { this.scene.add(g); this.oilBunkers.push(g); }
-        }
-    }
-
-    createSimpleEnvironment() {
-        for (let i = 0; i < 40; i++) {
-            const g = new THREE.Group();
-            const trunk = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.5, 0.7, 3),
-                new THREE.MeshStandardMaterial({ color: 0x8B5A2B })
-            );
-            trunk.position.y = 1.5; trunk.castShadow = true; g.add(trunk);
-            const lm = new THREE.MeshStandardMaterial({ color: 0x2a8a2a });
-            for (let l = 0; l < 3; l++) {
-                const leaf = new THREE.Mesh(new THREE.ConeGeometry(1.5 - l*0.3, 1.8 - l*0.3, 6), lm);
-                leaf.position.y = 3.2 + l*1.0;
-                leaf.castShadow = true; g.add(leaf);
-            }
-            let placed = false, att = 0;
-            while (!placed && att < 30) {
-                const x = (Math.random()-0.5)*130, z = (Math.random()-0.5)*130;
-                let close = false;
-                for (const b of this.buildings) {
-                    const bp = b.mesh.position;
-                    if (Math.hypot(x-bp.x, z-bp.z) < 7) { close = true; break; }
-                }
-                if (!close) { g.position.set(x, 0, z); placed = true; }
-                att++;
-            }
-            if (placed) { this.scene.add(g); this.trees.push(g); }
-        }
-    }
-
-    spawnInitialAmmoBoxes(count) {
-        for (let i = 0; i < count; i++) {
-            this.spawnAmmoBox((Math.random()-0.5)*100, 0.5, (Math.random()-0.5)*100, 5 + Math.floor(Math.random()*10));
-        }
-    }
-
-    spawnAmmoBox(x, y, z, ammo = 10) {
-        const b = new THREE.Mesh(
-            new THREE.BoxGeometry(0.8, 0.8, 0.8),
-            new THREE.MeshStandardMaterial({ color: 0xffaa00, emissive: 0x442200, transparent: true, opacity: 0.9 })
-        );
-        b.position.set(x, y, z);
-        b.castShadow = true;
-        const cv = document.createElement('canvas');
-        cv.width = cv.height = 64;
-        const ctx = cv.getContext('2d');
-        ctx.fillStyle = '#ffff00';
-        ctx.font = 'bold 32px Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('+', 32, 32);
-        const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv) }));
-        spr.scale.set(0.5, 0.5, 0.5);
-        spr.position.y = 0.6;
-        b.add(spr);
-        b.userData = { ammo };
-        this.scene.add(b);
-        this.ammoBoxes.push(b);
-        return b;
-    }
-
-    spawnAmmoBoxOnDeath(pos, ammo = 15) {
-        this.spawnAmmoBox(pos.x, 0.5, pos.z, ammo);
-    }
-
-    checkNearbyDoors() {
-        if (!this.gameActive || this.insideBuilding) return;
-        let found = null, minD = 4;
-        this.buildings.forEach(b => {
-            if (!b.doorPos) return;
-            const d = this.playerPos.distanceTo(b.doorPos);
-            if (d < minD) { minD = d; found = b; }
-        });
-        if (found !== this.nearbyDoor) {
-            this.nearbyDoor = found;
-            const el = document.getElementById('doorIndicator');
-            if (el) el.style.display = found ? 'block' : 'none';
-        }
-    }
-
-    enterBuilding(b) {
-        if (!b || this.insideBuilding) return;
-        this.insideBuilding = true;
-        this.currentBuilding = b;
-        this.playerPos.set(b.doorPos.x, 0, b.doorPos.z - 3);
-        const el = document.getElementById('doorIndicator');
-        if (el) el.textContent = 'INSIDE - TAP SHOOT TO EXIT';
-    }
-
-    exitBuilding() {
-        if (!this.insideBuilding) return;
-        this.insideBuilding = false;
-        if (this.nearbyDoor) this.playerPos.set(this.nearbyDoor.doorPos.x, 0, this.nearbyDoor.doorPos.z + 3);
-        const el = document.getElementById('doorIndicator');
-        if (el) el.style.display = 'none';
-        this.currentBuilding = null;
-    }
-
+    // ============ CONTROLS ============
     setupControls() {
         const swipeZone = document.getElementById('viewSwipeZone');
         const joy = document.getElementById('joystickContainer');
@@ -908,8 +1004,10 @@ class Game {
             for (let i = 0; i < e.touches.length; i++) {
                 if (e.touches[i].identifier === this.swipeTouchId) {
                     const t = e.touches[i];
-                    this.playerYaw -= (t.clientX - this.lastSwipeX) * this.touchSensitivity;
-                    this.lookPitch -= (t.clientY - this.lastSwipeY) * this.touchSensitivity;
+                    // If zoomed, slower sensitivity for finer aim
+                    const sens = this.zoomed ? this.touchSensitivity * 0.4 : this.touchSensitivity;
+                    this.playerYaw -= (t.clientX - this.lastSwipeX) * sens;
+                    this.lookPitch -= (t.clientY - this.lastSwipeY) * sens;
                     this.lookPitch = Math.max(-0.5, Math.min(0.6, this.lookPitch));
                     this.lastSwipeX = t.clientX;
                     this.lastSwipeY = t.clientY;
@@ -923,8 +1021,8 @@ class Game {
         const shootHandler = (e) => {
             if (e) e.preventDefault();
             if (!this.gameActive) return;
-            if (this.insideBuilding) this.exitBuilding();
-            else { this.shoot(); playGunSound(); }
+            this.shoot();
+            playGunSound();
         };
         if (shootBtn) {
             shootBtn.addEventListener('touchstart', shootHandler);
@@ -974,12 +1072,12 @@ class Game {
     updateJoystick(touch) {
         if (!this.joystickContainer || !this.joystickThumb) return;
         const r = this.joystickContainer.getBoundingClientRect();
-        const cx = r.left + r.width/2, cy = r.top + r.height/2;
+        const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
         let dx = touch.clientX - cx, dy = touch.clientY - cy;
         const dist = Math.hypot(dx, dy);
         if (dist > this.joystickMaxMove) {
-            dx = (dx/dist) * this.joystickMaxMove;
-            dy = (dy/dist) * this.joystickMaxMove;
+            dx = (dx / dist) * this.joystickMaxMove;
+            dy = (dy / dist) * this.joystickMaxMove;
         }
         this.joystickThumb.style.transform = `translate(${dx}px,${dy}px)`;
         this.moveX = dx / this.joystickMaxMove;
@@ -999,44 +1097,50 @@ class Game {
         const canvas = document.getElementById('minimapCanvas');
         if (!canvas) return;
         const ctx = this.minimapCtx;
+        const scale = canvas.width / (MAP_HALF * 2);
+        const toMap = (x, z) => ({ x: (x + MAP_HALF) * scale, y: (z + MAP_HALF) * scale });
+
         ctx.fillStyle = '#1a1a2e';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         ctx.fillStyle = '#8B4513';
         this.buildings.forEach(b => {
-            const bp = b.mesh.position;
-            const x = (bp.x + 75) * 1.5;
-            const z = (bp.z + 75) * 1.5;
-            if (x > 0 && x < canvas.width && z > 0 && z < canvas.height) ctx.fillRect(x-4, z-4, 8, 8);
+            const p = toMap(b.mesh.position.x, b.mesh.position.z);
+            ctx.fillRect(p.x - 3, p.y - 3, 6, 6);
         });
+
         ctx.fillStyle = '#3366cc';
         this.containers.forEach(c => {
-            const x = (c.position.x + 75) * 1.5;
-            const z = (c.position.z + 75) * 1.5;
-            if (x > 0 && x < canvas.width && z > 0 && z < canvas.height) ctx.fillRect(x-2, z-2, 4, 4);
+            const p = toMap(c.position.x, c.position.z);
+            ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
         });
+
         ctx.fillStyle = '#ffaa00';
         this.oilBunkers.forEach(b => {
-            const x = (b.position.x + 75) * 1.5;
-            const z = (b.position.z + 75) * 1.5;
-            if (x > 0 && x < canvas.width && z > 0 && z < canvas.height) {
-                ctx.beginPath(); ctx.arc(x, z, 5, 0, 2*Math.PI); ctx.fill();
-            }
+            const p = toMap(b.position.x, b.position.z);
+            ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill();
         });
+
+        ctx.fillStyle = '#9c6b3a';
+        this.ramps.forEach(r => {
+            const p = toMap(r.mesh.position.x, r.mesh.position.z);
+            ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+        });
+
         this.otherPlayers.forEach(p => {
-            const x = (p.group.position.x + 75) * 1.5;
-            const z = (p.group.position.z + 75) * 1.5;
-            if (x > 0 && x < canvas.width && z > 0 && z < canvas.height) {
+            const m = toMap(p.group.position.x, p.group.position.z);
+            if (m.x > 0 && m.x < canvas.width && m.y > 0 && m.y < canvas.height) {
                 ctx.fillStyle = '#ff4444';
-                ctx.beginPath(); ctx.arc(x, z, 5, 0, 2*Math.PI); ctx.fill();
+                ctx.beginPath(); ctx.arc(m.x, m.y, 4, 0, Math.PI * 2); ctx.fill();
             }
         });
-        const meX = (this.playerPos.x + 75) * 1.5;
-        const meZ = (this.playerPos.z + 75) * 1.5;
+
+        const me = toMap(this.playerPos.x, this.playerPos.z);
         ctx.fillStyle = '#44ff44';
-        ctx.beginPath(); ctx.arc(meX, meZ, 6, 0, 2*Math.PI); ctx.fill();
+        ctx.beginPath(); ctx.arc(me.x, me.y, 5, 0, Math.PI * 2); ctx.fill();
     }
 
+    // ============ GAME FLOW ============
     startGame() {
         this.gameActive = true;
         this.health = 100;
@@ -1044,10 +1148,14 @@ class Game {
         this.kills = 0;
         this.ammo = 30;
         this.boxesCollected = 0;
-        this.playerPos.set(0, 0, 15);
+        this.playerPos.set(0, 0, 30);
         this.playerYaw = 0;
         this.lookPitch = 0;
+        this.playerY = 0;
+        this.velocityY = 0;
+        this.onGround = true;
         this.cooldowns = {};
+        this.zoomed = false;
 
         if (this.firebaseReady && this.playerRef) {
             updateDoc(this.playerRef, {
@@ -1064,6 +1172,7 @@ class Game {
         this.ammo--;
         this.updateUI();
         this._shootFlashUntil = Date.now() + 250;
+        this.lastShootTime = Date.now();
 
         if (this.localPlayer) this.playOverride('Gun_Shoot', 300);
         if (this.firebaseReady && this.playerRef) {
@@ -1074,7 +1183,7 @@ class Game {
         raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
         const origin = raycaster.ray.origin.clone();
         const direction = raycaster.ray.direction.clone();
-        const rayLen = 40;
+        const rayLen = 80;
 
         for (let i = this.ammoBoxes.length - 1; i >= 0; i--) {
             const b = this.ammoBoxes[i];
@@ -1091,6 +1200,7 @@ class Game {
                 return;
             }
         }
+
         for (const [pid, p] of this.otherPlayers) {
             if (!p.group || p.isDead) continue;
             const target = p.group.position.clone();
@@ -1110,8 +1220,7 @@ class Game {
             await setDoc(doc(collection(db, 'game_hits')), {
                 shooterId: this.playerId,
                 shooterName: this.playerName,
-                targetId, damage,
-                timestamp: serverTimestamp()
+                targetId, damage, timestamp: serverTimestamp()
             });
         } catch (e) {}
     }
@@ -1125,10 +1234,7 @@ class Game {
         this.updateUI();
 
         const v = document.getElementById('damageVignette');
-        if (v) {
-            v.classList.add('active');
-            setTimeout(() => v.classList.remove('active'), 250);
-        }
+        if (v) { v.classList.add('active'); setTimeout(() => v.classList.remove('active'), 250); }
 
         if (this.localPlayer && this.health > 0) this.playOverride('HitRecieve', 400);
         if (this.firebaseReady && this.playerRef) updateDoc(this.playerRef, { health: this.health }).catch(() => {});
@@ -1138,18 +1244,14 @@ class Game {
 
     async die() {
         this.gameActive = false;
-        if (this.localPlayer) {
-            this.playAnim(this.localPlayer, 'Death', { loop: false, clamp: true, fade: 0.1 });
-        }
+        if (this.localPlayer) this.playAnim(this.localPlayer, 'Death', { loop: false, clamp: true, fade: 0.1 });
+
         if (this.lastDamagedBy && this.firebaseReady && db) {
             try {
                 await addDoc(collection(db, 'game_kills'), {
-                    killerId: this.lastDamagedBy.id,
-                    killerName: this.lastDamagedBy.name,
-                    victimId: this.playerId,
-                    victimName: this.playerName,
-                    weapon: 'Pistol',
-                    timestamp: serverTimestamp()
+                    killerId: this.lastDamagedBy.id, killerName: this.lastDamagedBy.name,
+                    victimId: this.playerId, victimName: this.playerName,
+                    weapon: 'Pistol', timestamp: serverTimestamp()
                 });
                 await updateDoc(doc(this.playersCollection, this.lastDamagedBy.id), { kills: increment(1) });
                 await this.recordWin(this.lastDamagedBy.id, this.lastDamagedBy.name);
@@ -1214,13 +1316,14 @@ class Game {
     restart() {
         this.ammoBoxes.forEach(b => this.scene.remove(b));
         this.ammoBoxes = [];
-        this.spawnInitialAmmoBoxes(30);
+        this.spawnInitialAmmoBoxes(40);
         this.health = 100; this.score = 0; this.kills = 0; this.ammo = 30; this.boxesCollected = 0;
         this.gameActive = true;
-        this.playerPos.set(0, 0, 15);
+        this.playerPos.set(0, 0, 30);
         this.playerYaw = 0; this.lookPitch = 0;
-        this.insideBuilding = false; this.currentBuilding = null; this.nearbyDoor = null;
+        this.playerY = 0; this.velocityY = 0; this.onGround = true;
         this.cooldowns = {};
+        this.zoomed = false;
 
         if (this.localPlayer) this.playAnim(this.localPlayer, 'Idle_Gun', { fade: 0.1 });
         if (this.firebaseReady && this.playerRef) {
@@ -1246,6 +1349,7 @@ class Game {
         this.otherPlayers.clear();
     }
 
+    // ============ MULTIPLAYER ============
     setupAuthListener() {
         onAuthStateChanged(auth, (user) => {
             this.currentUser = user;
@@ -1304,7 +1408,7 @@ class Game {
                 if (this.gameActive && this.playerRef && this.firebaseReady) {
                     const sp = Math.hypot(this.moveX, this.moveY);
                     updateDoc(this.playerRef, {
-                        position: { x: this.playerPos.x, y: 1, z: this.playerPos.z },
+                        position: { x: this.playerPos.x, y: this.playerY + 1, z: this.playerPos.z },
                         rotation: { y: this.playerYaw, x: this.lookPitch },
                         health: this.health, ammo: this.ammo,
                         isMoving: sp > 0.1,
@@ -1370,7 +1474,9 @@ class Game {
         this.otherPlayers.delete(pid);
     }
 
-    // ============ MAIN LOOP ============
+    // ============================================================
+    //                     MAIN LOOP
+    // ============================================================
     animate() {
         requestAnimationFrame(() => this.animate());
         const now = Date.now();
@@ -1378,20 +1484,33 @@ class Game {
         this.lastUpdateTime = now;
 
         if (this.gameActive) {
+            // ---- ZOOM AUTO RESET ----
+            if (this.zoomed && now - this.lastShootTime > ZOOM_AUTO_RESET_MS && this.lastShootTime > 0) {
+                this.zoomed = false;
+                const btn = document.getElementById('zoomBtn');
+                if (btn) btn.classList.remove('active');
+            }
+            // Smooth FOV + camDist
+            const targetFov = this.zoomed ? ZOOM_FOV : NORMAL_FOV;
+            const targetDist = this.zoomed ? ZOOM_CAM_DIST : NORMAL_CAM_DIST;
+            this.currentFov += (targetFov - this.currentFov) * 0.15;
+            this.currentCamDist += (targetDist - this.currentCamDist) * 0.15;
+            this.camera.fov = this.currentFov;
+            this.camera.updateProjectionMatrix();
+
+            // ---- MOVEMENT ----
             const forwardDir = new THREE.Vector3(-Math.sin(this.playerYaw), 0, -Math.cos(this.playerYaw));
             const rightDir = new THREE.Vector3(Math.cos(this.playerYaw), 0, -Math.sin(this.playerYaw));
 
-            // ===== FASTER MOVEMENT WITH DIRECTIONAL MULTIPLIERS =====
             const moveDelta = new THREE.Vector3();
-            const fwdAmount = this.moveY;
-            const sideAmount = this.moveX;
+            const zoomSlow = this.zoomed ? 0.55 : 1.0;
 
-            if (Math.abs(fwdAmount) > 0.05) {
-                let mult = fwdAmount > 0 ? this.sprintMultiplier : this.backwardMultiplier;
-                moveDelta.addScaledVector(forwardDir, fwdAmount * this.walkSpeed * mult);
+            if (Math.abs(this.moveY) > 0.05) {
+                const mult = this.moveY > 0 ? this.sprintMultiplier : this.backwardMultiplier;
+                moveDelta.addScaledVector(forwardDir, this.moveY * this.walkSpeed * mult * zoomSlow);
             }
-            if (Math.abs(sideAmount) > 0.05) {
-                moveDelta.addScaledVector(rightDir, sideAmount * this.walkSpeed * this.strafeMultiplier);
+            if (Math.abs(this.moveX) > 0.05) {
+                moveDelta.addScaledVector(rightDir, this.moveX * this.walkSpeed * this.strafeMultiplier * zoomSlow);
             }
 
             if (this.rolling && now < this.rollUntil) {
@@ -1400,25 +1519,55 @@ class Game {
                 this.rolling = false;
             }
 
-            const speed = moveDelta.length();
-            if (speed > 0.001) {
-                this.playerPos.add(moveDelta);
-                this.footstepTime += 0.25;
+            // Compute head Y for collision (feet + ~1.7)
+            const feetY = this.playerY;
+            const headY = this.playerY + 1.7;
+
+            // Try X axis
+            const newX = this.playerPos.x + moveDelta.x;
+            if (this.isFree(newX, this.playerPos.z, feetY + 0.1, headY, null)) {
+                this.playerPos.x = newX;
+            }
+            // Try Z axis
+            const newZ = this.playerPos.z + moveDelta.z;
+            if (this.isFree(this.playerPos.x, newZ, feetY + 0.1, headY, null)) {
+                this.playerPos.z = newZ;
             }
 
-            this.playerPos.x = Math.max(-70, Math.min(70, this.playerPos.x));
-            this.playerPos.z = Math.max(-70, Math.min(70, this.playerPos.z));
+            // World bounds
+            this.playerPos.x = Math.max(-MAP_HALF + 2, Math.min(MAP_HALF - 2, this.playerPos.x));
+            this.playerPos.z = Math.max(-MAP_HALF + 2, Math.min(MAP_HALF - 2, this.playerPos.z));
 
-            if (this.insideBuilding && this.currentBuilding) {
-                const i = this.currentBuilding.interior;
-                if (i) {
-                    this.playerPos.x = Math.max(i.minX + 0.6, Math.min(i.maxX - 0.6, this.playerPos.x));
-                    this.playerPos.z = Math.max(i.minZ + 0.6, Math.min(i.maxZ - 0.6, this.playerPos.z));
+            // ---- VERTICAL PHYSICS (arcade) ----
+            const groundY = this.getGroundY(this.playerPos.x, this.playerPos.z, this.playerY);
+
+            if (this.playerY > groundY + 0.05) {
+                // Falling
+                this.velocityY -= 0.03;
+                if (this.velocityY < -0.8) this.velocityY = -0.8;
+                this.playerY += this.velocityY;
+                this.onGround = false;
+                if (this.playerY <= groundY) {
+                    this.playerY = groundY;
+                    this.velocityY = 0;
+                    this.onGround = true;
                 }
+            } else if (this.playerY < groundY - 0.05) {
+                // Walking onto a higher surface (ramp) — snap up
+                this.playerY = groundY;
+                this.velocityY = 0;
+                this.onGround = true;
+            } else {
+                // On ground / ramp
+                this.playerY = groundY;
+                this.velocityY = 0;
+                this.onGround = true;
             }
 
+            // ---- UPDATE LOCAL PLAYER VISUAL ----
+            const speed = moveDelta.length();
             if (this.localPlayer) {
-                this.localPlayer.group.position.copy(this.playerPos);
+                this.localPlayer.group.position.set(this.playerPos.x, this.playerY, this.playerPos.z);
                 this.localPlayer.group.rotation.y = this.playerYaw;
 
                 let anim;
@@ -1428,10 +1577,11 @@ class Game {
                     this.overrideAnim = null;
                     if (this.rolling) anim = 'Roll';
                     else if (speed > 0.03) anim = 'Run';
+                    else if (this.zoomed) anim = 'Idle_Gun_Pointing';
                     else anim = 'Idle_Gun';
                 }
 
-                const isOneShot = this.overrideAnim && now < this.overrideUntil;
+                const isOneShot = this.overrideAnim && now < this.overrideAnim;
                 this.playAnim(this.localPlayer, anim, {
                     loop: !isOneShot,
                     clamp: isOneShot,
@@ -1440,16 +1590,24 @@ class Game {
                 this.localPlayer.mixer.update(dt);
             }
 
-            const camPos = this.playerPos.clone().add(forwardDir.clone().multiplyScalar(-this.camDist));
-            camPos.y = this.playerPos.y + this.camHeight;
+            // ---- CAMERA ----
+            const camPos = new THREE.Vector3(
+                this.playerPos.x,
+                this.playerY + this.camHeight,
+                this.playerPos.z
+            ).add(forwardDir.clone().multiplyScalar(-this.currentCamDist));
             this.camera.position.copy(camPos);
 
-            const lookTarget = this.playerPos.clone();
-            lookTarget.y += this.camLookHeight;
+            const lookTarget = new THREE.Vector3(
+                this.playerPos.x,
+                this.playerY + this.camLookHeight,
+                this.playerPos.z
+            );
             lookTarget.add(forwardDir.clone().multiplyScalar(3));
             lookTarget.y += this.lookPitch * 4;
             this.camera.lookAt(lookTarget);
 
+            // ---- OTHER PLAYERS ----
             this.otherPlayers.forEach((p, pid) => {
                 if (p.targetPosition) p.group.position.lerp(p.targetPosition, 0.35);
                 if (p.targetRotation !== undefined) {
@@ -1460,12 +1618,10 @@ class Game {
                 }
                 if (p.mixer) {
                     const d = p.data;
-                    const isMoving = d.isMoving || false;
-                    const isShooting = d.isShooting || false;
                     let anim = 'Idle_Gun';
                     if (p.isDead) anim = 'Death';
-                    else if (isShooting) anim = 'Gun_Shoot';
-                    else if (isMoving) anim = 'Run';
+                    else if (d.isShooting) anim = 'Gun_Shoot';
+                    else if (d.isMoving) anim = 'Run';
                     this.playAnim(p, anim, {
                         loop: anim !== 'Death' && anim !== 'Gun_Shoot',
                         clamp: anim === 'Death' || anim === 'Gun_Shoot',
@@ -1496,6 +1652,7 @@ class Game {
                 }
             });
 
+            // ---- AMMO BOXES ANIM ----
             this.ammoBoxes.forEach(b => {
                 b.rotation.y += 0.02;
                 b.position.y = 0.5 + Math.sin(Date.now() * 0.005) * 0.15;
