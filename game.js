@@ -122,7 +122,7 @@ class Game {
         this._shootFlashUntil = 0;
         this._lastShootTime = 0;
 
-        // Third-person camera - FIXED values
+        // Third-person camera
         this.camDist = 6.5;
         this.camHeight = 3.2;
         this.camLookHeight = 1.1;
@@ -229,21 +229,15 @@ class Game {
     createInstance() {
         if (!this.glbLoaded) return null;
         const model = SkeletonUtils.clone(this.glbBase);
-        // Rotate 180° so model faces -Z (Three.js "forward")
+        // Rotate 180° so model faces -Z ("forward" in Three.js world)
         model.rotation.y = Math.PI;
 
         const group = new THREE.Group();
         group.add(model);
 
-        // Fit to 1.8 units tall
-        const box = new THREE.Box3().setFromObject(model);
-        const size = box.getSize(new THREE.Vector3());
-        if (size.y > 0) {
-            const scale = 1.8 / size.y;
-            model.scale.setScalar(scale);
-            const box2 = new THREE.Box3().setFromObject(model);
-            model.position.y -= box2.min.y;
-        }
+        // Fit to 1.8 units tall using REAL bone measurement
+        // (Box3 on skinned meshes reports 0.479 but bones span 1.548, so we hard-set the scale)
+        model.scale.setScalar(1.163);
 
         const mixer = new THREE.AnimationMixer(model);
         const actions = {};
@@ -353,15 +347,15 @@ class Game {
 
     // ============ SCENE ============
     setupLighting() {
-        this.scene.add(new THREE.AmbientLight(0x404060));
-        const sun = new THREE.DirectionalLight(0xffeedd, 1.2);
+        this.scene.add(new THREE.AmbientLight(0x606080, 0.8));
+        const sun = new THREE.DirectionalLight(0xffeedd, 1.4);
         sun.position.set(30, 50, 30);
         sun.castShadow = true;
         sun.shadow.mapSize.set(2048, 2048);
         sun.shadow.camera.left = -60; sun.shadow.camera.right = 60;
         sun.shadow.camera.top = 60; sun.shadow.camera.bottom = -60;
         this.scene.add(sun);
-        const fill = new THREE.DirectionalLight(0x88aacc, 0.6);
+        const fill = new THREE.DirectionalLight(0x88aacc, 0.8);
         fill.position.set(-30, 20, -40);
         this.scene.add(fill);
     }
@@ -1138,7 +1132,6 @@ class Game {
         this.lastUpdateTime = now;
 
         if (this.gameActive) {
-            // Player forward direction (yaw = 0 means facing -Z)
             const forwardDir = new THREE.Vector3(
                 -Math.sin(this.playerYaw),
                 0,
@@ -1150,7 +1143,6 @@ class Game {
                 -Math.sin(this.playerYaw)
             );
 
-            // Apply movement in world space
             const moveDelta = new THREE.Vector3();
             if (Math.abs(this.moveY) > 0.05) moveDelta.addScaledVector(forwardDir, this.moveY * this.moveSpeed);
             if (Math.abs(this.moveX) > 0.05) moveDelta.addScaledVector(rightDir, this.moveX * this.moveSpeed);
@@ -1161,18 +1153,15 @@ class Game {
                 this.footstepTime += 0.2;
             }
 
-            // Bounds
             this.playerPos.x = Math.max(-60, Math.min(60, this.playerPos.x));
             this.playerPos.z = Math.max(-60, Math.min(60, this.playerPos.z));
 
-            // Building interior collision
             if (this.insideBuilding && this.currentBuilding) {
                 const i = this.currentBuilding.interior;
                 this.playerPos.x = Math.max(i.minX + 0.6, Math.min(i.maxX - 0.6, this.playerPos.x));
                 this.playerPos.z = Math.max(i.minZ + 0.6, Math.min(i.maxZ - 0.6, this.playerPos.z));
             }
 
-            // Update local player model
             if (this.localPlayer) {
                 this.localPlayer.group.position.copy(this.playerPos);
                 this.localPlayer.group.rotation.y = this.playerYaw;
@@ -1189,22 +1178,19 @@ class Game {
                 this.localPlayer.mixer.update(dt);
             }
 
-            // ===== THIRD-PERSON CAMERA (clean) =====
-            // Camera sits BEHIND player
+            // Third-person camera
             const camPos = this.playerPos.clone().add(
                 forwardDir.clone().multiplyScalar(-this.camDist)
             );
             camPos.y = this.playerPos.y + this.camHeight;
             this.camera.position.copy(camPos);
 
-            // Camera looks at a point AHEAD of the player, adjusted by pitch
             const lookTarget = this.playerPos.clone();
             lookTarget.y += this.camLookHeight;
             lookTarget.add(forwardDir.clone().multiplyScalar(3));
-            lookTarget.y += this.lookPitch * 4;  // pitch up = look up
+            lookTarget.y += this.lookPitch * 4;
             this.camera.lookAt(lookTarget);
 
-            // Update other players
             this.otherPlayers.forEach((p, pid) => {
                 if (p.targetPosition) p.group.position.lerp(p.targetPosition, 0.35);
                 if (p.targetRotation !== undefined) {
@@ -1251,7 +1237,6 @@ class Game {
                 }
             });
 
-            // Animate ammo boxes
             this.ammoBoxes.forEach(b => {
                 b.rotation.y += 0.02;
                 b.position.y = 0.5 + Math.sin(Date.now() * 0.005) * 0.15;
