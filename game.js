@@ -2,7 +2,10 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import {
+    getAuth, onAuthStateChanged,
+    signInWithEmailAndPassword
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import {
     getFirestore, collection, doc, setDoc, updateDoc, deleteDoc,
     onSnapshot, query, orderBy, limit, serverTimestamp, addDoc, increment
@@ -115,9 +118,6 @@ const KENNEY_BUILDINGS = [
     'water-tower.glb','windmill.glb','windmill-low.glb'
 ];
 
-// ============================================================
-//                     THE GAME
-// ============================================================
 class Game {
     constructor() {
         console.log('🎮 CODM-STYLE CITY WARZONE');
@@ -139,15 +139,10 @@ class Game {
         this.glbLoaded = false;
         this.handBoneName = null;
 
-        // Local player
         this.localPlayer = null;
-
-        // Other players
         this.otherPlayers = new Map();
-
         this.lastUpdateTime = Date.now();
 
-        // Action override
         this.overrideAnim = null;
         this.overrideUntil = 0;
         this.cooldowns = {};
@@ -194,16 +189,13 @@ class Game {
         this.gameActive = false;
         this._shootFlashUntil = 0;
 
-        // Camera follow params
         this.camHeight = 3.2;
         this.camLookHeight = 1.1;
 
-        // Player position
         this.playerPos = new THREE.Vector3(0, 0, 30);
         this.playerYaw = 0;
         this.lookPitch = 0;
 
-        // Movement (arcade snappy)
         this.walkSpeed = 0.25;
         this.sprintMultiplier = 1.7;
         this.strafeMultiplier = 0.85;
@@ -214,21 +206,18 @@ class Game {
         this.footstepTime = 0;
         this.touchSensitivity = 0.006;
 
-        // Joystick
         this.joystickActive = false;
         this.joystickTouchId = null;
         this.joystickMaxMove = 40;
         this.joystickThumb = document.getElementById('joystickThumb');
         this.joystickContainer = document.getElementById('joystickContainer');
 
-        // Swipe
         this.swipeTouchId = null;
         this.lastSwipeX = 0;
         this.lastSwipeY = 0;
 
-        // World objects
-        this.buildings = [];     // { mesh, collider: Box3, doorPos, topY }
-        this.ramps = [];         // { mesh, collider: Box3, topY }
+        this.buildings = [];
+        this.ramps = [];
         this.containers = [];
         this.oilBunkers = [];
         this.ammoBoxes = [];
@@ -238,7 +227,6 @@ class Game {
         this.insideBuilding = false;
         this.currentBuilding = null;
 
-        // Build the world
         this.setupLighting();
         this.setupGround();
         this.createRealisticBuildings();
@@ -288,7 +276,6 @@ class Game {
             el.innerHTML = `<span class="svg-icon">${SVG_ICONS[iconKey]}</span>`;
         });
 
-        // Create zoom button dynamically if not in HTML
         if (!document.getElementById('zoomBtn')) {
             const zoomBtn = document.createElement('div');
             zoomBtn.id = 'zoomBtn';
@@ -297,9 +284,75 @@ class Game {
             const actionsContainer = document.getElementById('actionButtons');
             if (actionsContainer) actionsContainer.appendChild(zoomBtn);
 
-            zoomBtn.addEventListener('click', (e) => { e.preventDefault(); this.toggleZoom(); });
-            zoomBtn.addEventListener('touchstart', (e) => { e.preventDefault(); this.toggleZoom(); });
+            const handler = (e) => { e.preventDefault(); this.toggleZoom(); };
+            zoomBtn.addEventListener('click', handler);
+            zoomBtn.addEventListener('touchstart', handler);
         }
+    }
+
+    // ============ LOGIN ============
+    showLoginScreen() {
+        const overlay = document.getElementById('loginOverlay');
+        if (overlay) overlay.style.display = 'flex';
+        this.bindLoginForm();
+    }
+
+    hideLoginScreen() {
+        const overlay = document.getElementById('loginOverlay');
+        if (overlay) overlay.style.display = 'none';
+    }
+
+    bindLoginForm() {
+        if (this._loginBound) return;
+        this._loginBound = true;
+
+        const submit = () => {
+            const email = (document.getElementById('loginEmail')?.value || '').trim();
+            const pass = document.getElementById('loginPassword')?.value || '';
+            const errBox = document.getElementById('loginError');
+            const btn = document.getElementById('loginSubmitBtn');
+
+            if (errBox) errBox.textContent = '';
+            if (!email || !pass) {
+                if (errBox) errBox.textContent = 'Enter email and password';
+                return;
+            }
+            if (btn) btn.classList.add('loading');
+
+            signInWithEmailAndPassword(auth, email, pass)
+                .then(() => {
+                    if (btn) btn.classList.remove('loading');
+                    this.hideLoginScreen();
+                })
+                .catch((error) => {
+                    if (btn) btn.classList.remove('loading');
+                    if (errBox) errBox.textContent = this.friendlyAuthError(error);
+                });
+        };
+
+        const submitBtn = document.getElementById('loginSubmitBtn');
+        if (submitBtn) submitBtn.addEventListener('click', submit);
+
+        ['loginEmail', 'loginPassword'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+        });
+
+        const guestBtn = document.getElementById('loginGuestBtn');
+        if (guestBtn) guestBtn.addEventListener('click', () => {
+            this.hideLoginScreen();
+            this.showNotification('Guest mode: multiplayer disabled', 'info');
+        });
+    }
+
+    friendlyAuthError(error) {
+        const code = error.code || '';
+        if (code.includes('user-not-found')) return 'No account with that email';
+        if (code.includes('wrong-password') || code.includes('invalid-credential')) return 'Wrong password';
+        if (code.includes('invalid-email')) return 'Invalid email format';
+        if (code.includes('too-many-requests')) return 'Too many attempts. Try later.';
+        if (code.includes('network-request-failed')) return 'No internet connection';
+        return 'Login failed: ' + (error.message || code);
     }
 
     // ============ GLB SOLDIER ============
@@ -323,7 +376,6 @@ class Game {
         });
     }
 
-    // ============ PROCEDURAL GUN ============
     createProceduralGun() {
         const gun = new THREE.Group();
         const black = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.4, metalness: 0.8 });
@@ -351,7 +403,6 @@ class Game {
         return gun;
     }
 
-    // ============ PLAYER INSTANCE ============
     createInstance() {
         if (!this.glbLoaded) return null;
         const model = SkeletonUtils.clone(this.glbBase);
@@ -360,7 +411,6 @@ class Game {
         group.add(model);
         model.scale.setScalar(1.163);
 
-        // Find hand bone
         let handBone = null;
         model.traverse((node) => {
             if (node.isBone) {
@@ -426,7 +476,6 @@ class Game {
         p.currentActionName = name;
     }
 
-    // ============ ZOOM ============
     toggleZoom() {
         this.zoomed = !this.zoomed;
         const btn = document.getElementById('zoomBtn');
@@ -434,52 +483,36 @@ class Game {
     }
 
     // ============ COLLISION ============
-    // Arcade per-axis collision against building + ramp boxes.
-    // Returns true if the position is free (not inside any box).
-    isFree(x, z, feetY, headY, ignoredBox) {
+    isFree(x, z, feetY, headY) {
         for (const b of this.buildings) {
             const c = b.collider;
-            if (c === ignoredBox) continue;
             if (x + PLAYER_RADIUS < c.min.x || x - PLAYER_RADIUS > c.max.x) continue;
             if (z + PLAYER_RADIUS < c.min.z || z - PLAYER_RADIUS > c.max.z) continue;
-            // Y overlap check: player body from feetY to headY
-            if (headY < c.min.y) continue;   // we're below the building
-            if (feetY > c.max.y - 0.05) continue; // we're above it (walking on roof)
+            if (headY < c.min.y) continue;
+            if (feetY > c.max.y - 0.05) continue;
             return false;
         }
-        // Ramps are treated as walkable — we don't block horizontal movement on them,
-        // we adjust Y based on the ramp surface (see getGroundY).
         return true;
     }
 
-    // Get the walkable surface Y at (x, z).
-    // Checks building tops and ramp surfaces, returns the highest surface below player.
     getGroundY(x, z, currentY) {
-        let best = 0; // ground level
-
-        // Building tops
+        let best = 0;
         for (const b of this.buildings) {
             const c = b.collider;
             if (x + PLAYER_RADIUS < c.min.x || x - PLAYER_RADIUS > c.max.x) continue;
             if (z + PLAYER_RADIUS < c.min.z || z - PLAYER_RADIUS > c.max.z) continue;
-            if (c.max.y > best && c.max.y <= currentY + 0.5) {
-                best = c.max.y;
-            }
+            if (c.max.y > best && c.max.y <= currentY + 0.5) best = c.max.y;
         }
-
-        // Ramp surfaces — check if within ramp footprint, compute sloped Y
         for (const r of this.ramps) {
             const c = r.collider;
             if (x < c.min.x || x > c.max.x || z < c.min.z || z > c.max.z) continue;
-            // Ramp slopes along its local direction. Compute Y from position within box.
             const t = r.computeSurfaceY(x, z);
             if (t > best && t <= currentY + 0.6) best = t;
         }
-
         return best;
     }
 
-    // ============ WORLD BUILD ============
+    // ============ WORLD ============
     setupLighting() {
         this.scene.add(new THREE.AmbientLight(0x606080, 0.9));
         const sun = new THREE.DirectionalLight(0xffeedd, 1.4);
@@ -506,7 +539,6 @@ class Game {
         g.receiveShadow = true;
         this.scene.add(g);
 
-        // Streets — a cross grid
         const roadMat = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.9 });
         for (let i = 0; i <= BUILD_COLS; i++) {
             const x = -((BUILD_COLS - 1) * BUILD_SPACING_X) / 2 + i * BUILD_SPACING_X - BUILD_SPACING_X / 2;
@@ -525,7 +557,6 @@ class Game {
             this.scene.add(road);
         }
 
-        // Grass patches
         for (let i = 0; i < 150; i++) {
             const p = new THREE.Mesh(
                 new THREE.CircleGeometry(2 + Math.random() * 4, 6),
@@ -538,7 +569,6 @@ class Game {
         }
     }
 
-    // ============ BUILDINGS ============
     createRealisticBuildings() {
         const loader = new GLTFLoader();
         const offsetX = -((BUILD_COLS - 1) * BUILD_SPACING_X) / 2;
@@ -556,7 +586,6 @@ class Game {
                     b.rotation.y = Math.floor(Math.random() * 4) * (Math.PI / 2);
                     b.traverse(n => { if (n.isMesh) { n.castShadow = true; n.receiveShadow = true; } });
 
-                    // Scale to a target height
                     const rawBox = new THREE.Box3().setFromObject(b);
                     const rawSize = rawBox.getSize(new THREE.Vector3());
                     const targetHeight = 10 + Math.random() * 10;
@@ -567,7 +596,6 @@ class Game {
                         b.position.y -= box2.min.y;
                     }
 
-                    // Recompute the collider after scaling
                     const box3 = new THREE.Box3().setFromObject(b);
                     const size = box3.getSize(new THREE.Vector3());
 
@@ -578,15 +606,12 @@ class Game {
                         doorPos: new THREE.Vector3(x, 1.2, z + size.z * 0.55),
                         topY: box3.max.y
                     });
-                }, undefined, () => {
-                    // Silent fail — no fallback
-                });
+                }, undefined, () => {});
             }
         }
         console.log(`🏢 Loading ${BUILD_COLS * BUILD_ROWS} buildings`);
     }
 
-    // ============ RAMPS ============
     createRamps() {
         const woodMat = new THREE.MeshStandardMaterial({ color: 0x8B5A2B, roughness: 0.85 });
         let placed = 0;
@@ -594,7 +619,6 @@ class Game {
 
         while (placed < RAMP_COUNT && attempts < 400) {
             attempts++;
-            // Pick a random building to attach the ramp to
             if (this.buildings.length === 0) break;
             const b = this.buildings[Math.floor(Math.random() * this.buildings.length)];
             const bx = b.collider.min.x + (b.collider.max.x - b.collider.min.x) * (Math.random() > 0.5 ? -0.7 : 1.7);
@@ -606,20 +630,12 @@ class Game {
 
             const box = new THREE.BoxGeometry(rampLength, 0.4, rampWidth);
             const ramp = new THREE.Mesh(box, woodMat);
-
-            // Rotate so it slopes: rotate around Z axis by 20 degrees
             const angle = Math.atan2(rampHeight, rampLength);
             ramp.rotation.z = -angle;
             ramp.position.set(bx, rampHeight / 2, bz);
             ramp.castShadow = true;
             ramp.receiveShadow = true;
-
             this.scene.add(ramp);
-
-            // Approximate ramp collider — we DON'T block movement, but we do
-            // need to know the ramp surface. Store a computeSurfaceY function.
-            const localMinX = -rampLength / 2;
-            const localMaxX = rampLength / 2;
 
             this.ramps.push({
                 mesh: ramp,
@@ -627,8 +643,7 @@ class Game {
                     new THREE.Vector3(bx - rampLength / 2, 0, bz - rampWidth / 2),
                     new THREE.Vector3(bx + rampLength / 2, rampHeight, bz + rampWidth / 2)
                 ),
-                computeSurfaceY: (px, pz) => {
-                    // Linear interpolation along X axis from 0 at minX to rampHeight at maxX
+                computeSurfaceY: (px) => {
                     const t = (px - (bx - rampLength / 2)) / rampLength;
                     return Math.max(0, Math.min(rampHeight, t * rampHeight));
                 }
@@ -638,7 +653,6 @@ class Game {
         console.log(`🪜 Placed ${placed} ramps`);
     }
 
-    // ============ CONTAINERS / BUNKERS / TREES ============
     createContainers(count) {
         const colors = [0x3366cc, 0xcc3333, 0x33cc33, 0xcccc33, 0xcc33cc, 0x888888];
         for (let i = 0; i < count; i++) {
@@ -646,10 +660,9 @@ class Game {
             const w = 2.5 + Math.random() * 1.5;
             const h = 2.5 + Math.random() * 1;
             const d = 6 + Math.random() * 2;
-            const color = colors[Math.floor(Math.random() * colors.length)];
             const body = new THREE.Mesh(
                 new THREE.BoxGeometry(w, h, d),
-                new THREE.MeshStandardMaterial({ color, roughness: 0.6 })
+                new THREE.MeshStandardMaterial({ color: colors[Math.floor(Math.random() * colors.length)], roughness: 0.6 })
             );
             body.position.y = h / 2;
             body.castShadow = body.receiveShadow = true;
@@ -824,8 +837,6 @@ class Game {
         if (actionName === 'Interact') {
             this.cooldowns.Interact = Date.now() + 500;
             this.playOverride('Interact', 600);
-
-            // Ammo box within 3m
             let nearest = null, nearestDist = 3;
             this.ammoBoxes.forEach(b => {
                 const d = this.playerPos.distanceTo(b.position);
@@ -1004,7 +1015,6 @@ class Game {
             for (let i = 0; i < e.touches.length; i++) {
                 if (e.touches[i].identifier === this.swipeTouchId) {
                     const t = e.touches[i];
-                    // If zoomed, slower sensitivity for finer aim
                     const sens = this.zoomed ? this.touchSensitivity * 0.4 : this.touchSensitivity;
                     this.playerYaw -= (t.clientX - this.lastSwipeX) * sens;
                     this.lookPitch -= (t.clientY - this.lastSwipeY) * sens;
@@ -1108,25 +1118,21 @@ class Game {
             const p = toMap(b.mesh.position.x, b.mesh.position.z);
             ctx.fillRect(p.x - 3, p.y - 3, 6, 6);
         });
-
         ctx.fillStyle = '#3366cc';
         this.containers.forEach(c => {
             const p = toMap(c.position.x, c.position.z);
             ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
         });
-
         ctx.fillStyle = '#ffaa00';
         this.oilBunkers.forEach(b => {
             const p = toMap(b.position.x, b.position.z);
             ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill();
         });
-
         ctx.fillStyle = '#9c6b3a';
         this.ramps.forEach(r => {
             const p = toMap(r.mesh.position.x, r.mesh.position.z);
             ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
         });
-
         this.otherPlayers.forEach(p => {
             const m = toMap(p.group.position.x, p.group.position.z);
             if (m.x > 0 && m.x < canvas.width && m.y > 0 && m.y < canvas.height) {
@@ -1134,7 +1140,6 @@ class Game {
                 ctx.beginPath(); ctx.arc(m.x, m.y, 4, 0, Math.PI * 2); ctx.fill();
             }
         });
-
         const me = toMap(this.playerPos.x, this.playerPos.z);
         ctx.fillStyle = '#44ff44';
         ctx.beginPath(); ctx.arc(me.x, me.y, 5, 0, Math.PI * 2); ctx.fill();
@@ -1218,8 +1223,7 @@ class Game {
         try {
             if (!this.firebaseReady || !this.playerId || !targetId || !db) return;
             await setDoc(doc(collection(db, 'game_hits')), {
-                shooterId: this.playerId,
-                shooterName: this.playerName,
+                shooterId: this.playerId, shooterName: this.playerName,
                 targetId, damage, timestamp: serverTimestamp()
             });
         } catch (e) {}
@@ -1360,11 +1364,12 @@ class Game {
                     if (p) { const pr = JSON.parse(p); this.playerName = pr.name || this.playerName; }
                 } catch (e) {}
                 this.firebaseReady = true;
+                this.hideLoginScreen();
                 this.setupFirebase();
                 this.showNotification(`Welcome ${this.playerName}!`, 'success');
             } else {
                 this.firebaseReady = false;
-                this.showNotification('Offline - log in for multiplayer', 'info');
+                this.showLoginScreen();
             }
         }, (e) => { this.firebaseReady = false; });
     }
@@ -1474,9 +1479,7 @@ class Game {
         this.otherPlayers.delete(pid);
     }
 
-    // ============================================================
-    //                     MAIN LOOP
-    // ============================================================
+    // ============ MAIN LOOP ============
     animate() {
         requestAnimationFrame(() => this.animate());
         const now = Date.now();
@@ -1484,13 +1487,12 @@ class Game {
         this.lastUpdateTime = now;
 
         if (this.gameActive) {
-            // ---- ZOOM AUTO RESET ----
+            // Zoom auto-reset
             if (this.zoomed && now - this.lastShootTime > ZOOM_AUTO_RESET_MS && this.lastShootTime > 0) {
                 this.zoomed = false;
                 const btn = document.getElementById('zoomBtn');
                 if (btn) btn.classList.remove('active');
             }
-            // Smooth FOV + camDist
             const targetFov = this.zoomed ? ZOOM_FOV : NORMAL_FOV;
             const targetDist = this.zoomed ? ZOOM_CAM_DIST : NORMAL_CAM_DIST;
             this.currentFov += (targetFov - this.currentFov) * 0.15;
@@ -1498,7 +1500,7 @@ class Game {
             this.camera.fov = this.currentFov;
             this.camera.updateProjectionMatrix();
 
-            // ---- MOVEMENT ----
+            // Movement
             const forwardDir = new THREE.Vector3(-Math.sin(this.playerYaw), 0, -Math.cos(this.playerYaw));
             const rightDir = new THREE.Vector3(Math.cos(this.playerYaw), 0, -Math.sin(this.playerYaw));
 
@@ -1512,37 +1514,31 @@ class Game {
             if (Math.abs(this.moveX) > 0.05) {
                 moveDelta.addScaledVector(rightDir, this.moveX * this.walkSpeed * this.strafeMultiplier * zoomSlow);
             }
-
             if (this.rolling && now < this.rollUntil) {
                 moveDelta.addScaledVector(this.rollDirection, this.rollSpeed);
             } else if (this.rolling) {
                 this.rolling = false;
             }
 
-            // Compute head Y for collision (feet + ~1.7)
             const feetY = this.playerY;
             const headY = this.playerY + 1.7;
 
-            // Try X axis
             const newX = this.playerPos.x + moveDelta.x;
-            if (this.isFree(newX, this.playerPos.z, feetY + 0.1, headY, null)) {
+            if (this.isFree(newX, this.playerPos.z, feetY + 0.1, headY)) {
                 this.playerPos.x = newX;
             }
-            // Try Z axis
             const newZ = this.playerPos.z + moveDelta.z;
-            if (this.isFree(this.playerPos.x, newZ, feetY + 0.1, headY, null)) {
+            if (this.isFree(this.playerPos.x, newZ, feetY + 0.1, headY)) {
                 this.playerPos.z = newZ;
             }
 
-            // World bounds
             this.playerPos.x = Math.max(-MAP_HALF + 2, Math.min(MAP_HALF - 2, this.playerPos.x));
             this.playerPos.z = Math.max(-MAP_HALF + 2, Math.min(MAP_HALF - 2, this.playerPos.z));
 
-            // ---- VERTICAL PHYSICS (arcade) ----
+            // Vertical
             const groundY = this.getGroundY(this.playerPos.x, this.playerPos.z, this.playerY);
 
             if (this.playerY > groundY + 0.05) {
-                // Falling
                 this.velocityY -= 0.03;
                 if (this.velocityY < -0.8) this.velocityY = -0.8;
                 this.playerY += this.velocityY;
@@ -1553,18 +1549,15 @@ class Game {
                     this.onGround = true;
                 }
             } else if (this.playerY < groundY - 0.05) {
-                // Walking onto a higher surface (ramp) — snap up
                 this.playerY = groundY;
                 this.velocityY = 0;
                 this.onGround = true;
             } else {
-                // On ground / ramp
                 this.playerY = groundY;
                 this.velocityY = 0;
                 this.onGround = true;
             }
 
-            // ---- UPDATE LOCAL PLAYER VISUAL ----
             const speed = moveDelta.length();
             if (this.localPlayer) {
                 this.localPlayer.group.position.set(this.playerPos.x, this.playerY, this.playerPos.z);
@@ -1581,7 +1574,7 @@ class Game {
                     else anim = 'Idle_Gun';
                 }
 
-                const isOneShot = this.overrideAnim && now < this.overrideAnim;
+                const isOneShot = this.overrideAnim && now < this.overrideUntil;
                 this.playAnim(this.localPlayer, anim, {
                     loop: !isOneShot,
                     clamp: isOneShot,
@@ -1590,7 +1583,6 @@ class Game {
                 this.localPlayer.mixer.update(dt);
             }
 
-            // ---- CAMERA ----
             const camPos = new THREE.Vector3(
                 this.playerPos.x,
                 this.playerY + this.camHeight,
@@ -1607,7 +1599,6 @@ class Game {
             lookTarget.y += this.lookPitch * 4;
             this.camera.lookAt(lookTarget);
 
-            // ---- OTHER PLAYERS ----
             this.otherPlayers.forEach((p, pid) => {
                 if (p.targetPosition) p.group.position.lerp(p.targetPosition, 0.35);
                 if (p.targetRotation !== undefined) {
@@ -1652,7 +1643,6 @@ class Game {
                 }
             });
 
-            // ---- AMMO BOXES ANIM ----
             this.ammoBoxes.forEach(b => {
                 b.rotation.y += 0.02;
                 b.position.y = 0.5 + Math.sin(Date.now() * 0.005) * 0.15;
