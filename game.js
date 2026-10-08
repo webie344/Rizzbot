@@ -364,7 +364,7 @@ class Game {
         });
     }
 
-    // ============ LOAD GUN (with diagnostics) ============
+    // ============ LOAD GUN — strips hidden child scale ============
     loadGun() {
         return new Promise((resolve, reject) => {
             const loader = new GLTFLoader();
@@ -375,45 +375,61 @@ class Game {
                         if (n.isMesh) { n.castShadow = true; n.receiveShadow = true; n.frustumCulled = false; }
                     });
 
-                    // Diagnostic 1: measure BEFORE any scaling
-                    const rawBox = new THREE.Box3().setFromObject(this.gunTemplate);
-                    const rawSize = rawBox.getSize(new THREE.Vector3());
-
-                    // Diagnostic 2: find the largest hidden scale on any child node
-                    let largestChildScale = 1;
+                    // Find the largest absolute scale on any node
+                    let maxScale = 1;
                     this.gunTemplate.traverse((n) => {
                         if (n.scale) {
                             const s = Math.max(Math.abs(n.scale.x), Math.abs(n.scale.y), Math.abs(n.scale.z));
-                            if (s > largestChildScale) largestChildScale = s;
+                            if (s > maxScale) maxScale = s;
                         }
                     });
 
-                    // Apply fixed scale
-                    const GUN_SCALE = 0.01;
-                    this.gunTemplate.scale.setScalar(GUN_SCALE);
+                    // Divide every node's scale by maxScale to normalize
+                    this.gunTemplate.traverse((n) => {
+                        if (n.scale) {
+                            n.scale.set(
+                                n.scale.x / maxScale,
+                                n.scale.y / maxScale,
+                                n.scale.z / maxScale
+                            );
+                        }
+                    });
 
-                    // Recenter to origin
+                    // Reset the root node's scale to 1 (in case it wasn't already)
+                    this.gunTemplate.scale.set(1, 1, 1);
+
+                    // Now measure at true size
+                    const rawBox = new THREE.Box3().setFromObject(this.gunTemplate);
+                    const rawSize = rawBox.getSize(new THREE.Vector3());
+                    const maxDim = Math.max(rawSize.x, rawSize.y, rawSize.z);
+
+                    // Scale to rifle-sized (0.9 world units long)
+                    const TARGET_LENGTH = 0.9;
+                    if (maxDim > 0) {
+                        const targetScale = TARGET_LENGTH / maxDim;
+                        this.gunTemplate.scale.setScalar(targetScale);
+                    }
+
+                    // Recenter
                     const center = rawBox.getCenter(new THREE.Vector3());
                     this.gunTemplate.position.sub(center);
 
-                    // Diagnostic 3: measure AFTER scaling
+                    // Report
                     const finalBox = new THREE.Box3().setFromObject(this.gunTemplate);
                     const finalSize = finalBox.getSize(new THREE.Vector3());
 
-                    console.log('GUN RAW SIZE:', rawSize.x.toFixed(3), rawSize.y.toFixed(3), rawSize.z.toFixed(3));
-                    console.log('GUN CHILD MAX SCALE:', largestChildScale);
-                    console.log('GUN FINAL SIZE:', finalSize.x.toFixed(3), finalSize.y.toFixed(3), finalSize.z.toFixed(3));
+                    console.log('GUN maxScale stripped:', maxScale);
+                    console.log('GUN raw size:', rawSize.x.toFixed(3), rawSize.y.toFixed(3), rawSize.z.toFixed(3));
+                    console.log('GUN final size:', finalSize.x.toFixed(3), finalSize.y.toFixed(3), finalSize.z.toFixed(3));
 
-                    // On-screen diagnostic
                     const div = document.createElement('div');
-                    div.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:red;color:white;padding:18px;font-size:14px;z-index:99999;font-family:monospace;border-radius:10px;text-align:left;line-height:1.7;';
+                    div.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:green;color:white;padding:18px;font-size:14px;z-index:99999;font-family:monospace;border-radius:10px;text-align:left;line-height:1.7;';
                     div.innerHTML =
-                        '<b>GUN DIAGNOSTIC</b><br>' +
+                        '<b>GUN FIXED</b><br>' +
+                        'STRIPPED SCALE: ' + maxScale + '<br>' +
                         'RAW SIZE: ' + rawSize.x.toFixed(3) + ' / ' + rawSize.y.toFixed(3) + ' / ' + rawSize.z.toFixed(3) + '<br>' +
-                        'CHILD MAX SCALE: ' + largestChildScale + '<br>' +
-                        'FINAL SIZE: ' + finalSize.x.toFixed(3) + ' / ' + finalSize.y.toFixed(3) + ' / ' + finalSize.z.toFixed(3) + '<br>' +
-                        'APPLIED SCALE: ' + GUN_SCALE + '<br><br>' +
-                        '<span style="font-size:12px;color:#ffcccc;">Tap to dismiss</span>';
+                        'FINAL SIZE: ' + finalSize.x.toFixed(3) + ' / ' + finalSize.y.toFixed(3) + ' / ' + finalSize.z.toFixed(3) + '<br><br>' +
+                        '<span style="font-size:12px;color:#ccffcc;">Tap to dismiss</span>';
                     div.onclick = () => div.remove();
                     document.body.appendChild(div);
 
