@@ -153,6 +153,7 @@ class Game {
 
         this.zoomMode = ZOOM_MODE.OFF;
         this.lastShootTime = 0;
+        this._resetZoomArmed = false;
         this.currentFov = NORMAL_FOV;
         this.currentCamDist = NORMAL_CAM_DIST;
 
@@ -364,7 +365,6 @@ class Game {
         });
     }
 
-    // ============ LOAD GUN — strips hidden child scale ============
     loadGun() {
         return new Promise((resolve, reject) => {
             const loader = new GLTFLoader();
@@ -375,7 +375,6 @@ class Game {
                         if (n.isMesh) { n.castShadow = true; n.receiveShadow = true; n.frustumCulled = false; }
                     });
 
-                    // Find the largest absolute scale on any node
                     let maxScale = 1;
                     this.gunTemplate.traverse((n) => {
                         if (n.scale) {
@@ -383,56 +382,29 @@ class Game {
                             if (s > maxScale) maxScale = s;
                         }
                     });
-
-                    // Divide every node's scale by maxScale to normalize
                     this.gunTemplate.traverse((n) => {
                         if (n.scale) {
-                            n.scale.set(
-                                n.scale.x / maxScale,
-                                n.scale.y / maxScale,
-                                n.scale.z / maxScale
-                            );
+                            n.scale.set(n.scale.x / maxScale, n.scale.y / maxScale, n.scale.z / maxScale);
                         }
                     });
-
-                    // Reset the root node's scale to 1 (in case it wasn't already)
                     this.gunTemplate.scale.set(1, 1, 1);
 
-                    // Now measure at true size
                     const rawBox = new THREE.Box3().setFromObject(this.gunTemplate);
                     const rawSize = rawBox.getSize(new THREE.Vector3());
                     const maxDim = Math.max(rawSize.x, rawSize.y, rawSize.z);
 
-                    // Scale to rifle-sized (0.9 world units long)
                     const TARGET_LENGTH = 0.9;
                     if (maxDim > 0) {
                         const targetScale = TARGET_LENGTH / maxDim;
                         this.gunTemplate.scale.setScalar(targetScale);
                     }
 
-                    // Recenter
-                    const center = rawBox.getCenter(new THREE.Vector3());
+                    // Recenter so grip end is at origin (barrel extends forward)
+                    const finalBox = new THREE.Box3().setFromObject(this.gunTemplate);
+                    const center = finalBox.getCenter(new THREE.Vector3());
                     this.gunTemplate.position.sub(center);
 
-                    // Report
-                    const finalBox = new THREE.Box3().setFromObject(this.gunTemplate);
-                    const finalSize = finalBox.getSize(new THREE.Vector3());
-
-                    console.log('GUN maxScale stripped:', maxScale);
-                    console.log('GUN raw size:', rawSize.x.toFixed(3), rawSize.y.toFixed(3), rawSize.z.toFixed(3));
-                    console.log('GUN final size:', finalSize.x.toFixed(3), finalSize.y.toFixed(3), finalSize.z.toFixed(3));
-
-                    const div = document.createElement('div');
-                    div.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:green;color:white;padding:18px;font-size:14px;z-index:99999;font-family:monospace;border-radius:10px;text-align:left;line-height:1.7;';
-                    div.innerHTML =
-                        '<b>GUN FIXED</b><br>' +
-                        'STRIPPED SCALE: ' + maxScale + '<br>' +
-                        'RAW SIZE: ' + rawSize.x.toFixed(3) + ' / ' + rawSize.y.toFixed(3) + ' / ' + rawSize.z.toFixed(3) + '<br>' +
-                        'FINAL SIZE: ' + finalSize.x.toFixed(3) + ' / ' + finalSize.y.toFixed(3) + ' / ' + finalSize.z.toFixed(3) + '<br><br>' +
-                        '<span style="font-size:12px;color:#ccffcc;">Tap to dismiss</span>';
-                    div.onclick = () => div.remove();
-                    document.body.appendChild(div);
-
+                    console.log('✅ Rifle.glb loaded');
                     this.gunLoaded = true;
                     resolve();
                 },
@@ -473,7 +445,8 @@ class Game {
             let gun;
             if (this.gunLoaded && this.gunTemplate) {
                 gun = SkeletonUtils.clone(this.gunTemplate);
-                gun.position.set(0, 0, 0);
+                // Shift gun forward so the grip lands in the palm, not the barrel center
+                gun.position.set(0, 0, -0.35);
                 gun.rotation.set(0, 0, 0);
             } else {
                 gun = this.createProceduralGun();
@@ -1189,6 +1162,7 @@ class Game {
         this.onGround = true;
         this.cooldowns = {};
         this.zoomMode = ZOOM_MODE.OFF;
+        this._resetZoomArmed = false;
         this.applyZoomClasses();
 
         if (this.firebaseReady && this.playerRef) {
@@ -1207,6 +1181,7 @@ class Game {
         this.updateUI();
         this._shootFlashUntil = Date.now() + 250;
         this.lastShootTime = Date.now();
+        this._resetZoomArmed = true;
 
         if (this.localPlayer) this.playOverride('Gun_Shoot', 300);
         if (this.firebaseReady && this.playerRef) {
@@ -1355,6 +1330,7 @@ class Game {
         this.playerY = 0; this.velocityY = 0; this.onGround = true;
         this.cooldowns = {};
         this.zoomMode = ZOOM_MODE.OFF;
+        this._resetZoomArmed = false;
         this.applyZoomClasses();
 
         if (this.localPlayer) this.playAnim(this.localPlayer, 'Idle_Gun', { fade: 0.1 });
@@ -1504,8 +1480,12 @@ class Game {
         this.lastUpdateTime = now;
 
         if (this.gameActive) {
-            if (this.zoomMode !== ZOOM_MODE.OFF && now - this.lastShootTime > ZOOM_AUTO_RESET_MS && this.lastShootTime > 0) {
+            // FIXED: only reset zoom if we zoomed, shot once, and 2s passed
+            if (this.zoomMode !== ZOOM_MODE.OFF
+                && this._resetZoomArmed
+                && now - this.lastShootTime > ZOOM_AUTO_RESET_MS) {
                 this.zoomMode = ZOOM_MODE.OFF;
+                this._resetZoomArmed = false;
                 this.applyZoomClasses();
             }
 
