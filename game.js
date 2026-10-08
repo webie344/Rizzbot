@@ -27,7 +27,6 @@ try {
     db = getFirestore(app);
 } catch (e) { console.error('Firebase init:', e); }
 
-// ============ WORLD CONSTANTS ============
 const MAP_HALF = 200;
 const FOG_NEAR = 200;
 const FOG_FAR = 500;
@@ -37,7 +36,6 @@ const BUILD_SPACING_X = 38;
 const BUILD_SPACING_Z = 42;
 const PLAYER_RADIUS = 0.4;
 
-// Zoom — closer camera so player is not tiny
 const NORMAL_FOV = 70;
 const RIFLE_FOV = 45;
 const SNIPER_FOV = 22;
@@ -48,7 +46,6 @@ const ZOOM_AUTO_RESET_MS = 2000;
 
 const ZOOM_MODE = { OFF: 'off', RIFLE: 'rifle', SNIPER: 'sniper' };
 
-// ============ GUN SOUND ============
 function playGunSound() {
     try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -74,7 +71,6 @@ function createGunSound(ctx) {
     } catch (e) {}
 }
 
-// ============ SVG ICONS ============
 const SVG_ICONS = {
     punch: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 20h12a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2h-1V8a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2v5H6a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2z"/><path d="M9 8V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v3"/></svg>`,
     kick: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l6-4 6 2 4-6"/><path d="M10 16l-2-8 4-2 2 6"/><circle cx="13" cy="4" r="2"/></svg>`,
@@ -265,7 +261,6 @@ class Game {
         window.addEventListener('beforeunload', () => this.cleanup());
     }
 
-    // ============ SVG INJECTION ============
     injectSVGIcons() {
         const map = {
             punchBtn: 'punch', kickBtn: 'kick', rollBtn: 'roll', waveBtn: 'wave',
@@ -286,7 +281,6 @@ class Game {
         }
     }
 
-    // ============ LOGIN ============
     showLoginScreen() {
         const overlay = document.getElementById('loginOverlay');
         if (overlay) overlay.style.display = 'flex';
@@ -350,7 +344,6 @@ class Game {
         return 'Login failed: ' + (error.message || code);
     }
 
-    // ============ LOAD SOLDIER ============
     loadGLB() {
         return new Promise((resolve, reject) => {
             const loader = new GLTFLoader();
@@ -371,7 +364,6 @@ class Game {
         });
     }
 
-    // ============ LOAD GUN ============
     loadGun() {
         return new Promise((resolve, reject) => {
             const loader = new GLTFLoader();
@@ -382,12 +374,12 @@ class Game {
                         if (n.isMesh) { n.castShadow = true; n.receiveShadow = true; n.frustumCulled = false; }
                     });
 
-                    // Auto-scale gun to a sane size relative to the soldier (~0.9 units long)
+                    // Auto-scale gun to be small relative to soldier
                     const box = new THREE.Box3().setFromObject(this.gunTemplate);
                     const size = box.getSize(new THREE.Vector3());
                     const maxDim = Math.max(size.x, size.y, size.z);
                     if (maxDim > 0) {
-                        const targetLength = 0.9;
+                        const targetLength = 0.35;  // gun length in world units
                         const scale = targetLength / maxDim;
                         this.gunTemplate.scale.setScalar(scale);
                     }
@@ -406,7 +398,6 @@ class Game {
         });
     }
 
-    // ============ PLAYER INSTANCE ============
     createInstance() {
         if (!this.glbLoaded) return null;
         const model = SkeletonUtils.clone(this.glbBase);
@@ -438,23 +429,15 @@ class Game {
             let gun;
             if (this.gunLoaded && this.gunTemplate) {
                 gun = SkeletonUtils.clone(this.gunTemplate);
-                // Gun is already auto-scaled and recentered in loadGun().
-                // Position is set so the grip ends up at the wrist.
                 gun.position.set(0, 0, 0);
                 gun.rotation.set(0, 0, 0);
                 gun.scale.setScalar(1.0);
             } else {
-                // Fallback tiny procedural gun
                 gun = this.createProceduralGun();
                 gun.position.set(0, 0.05, 0.05);
                 gun.scale.setScalar(0.5);
             }
             handBone.add(gun);
-        } else if (!this.handBoneName) {
-            const bones = [];
-            model.traverse((n) => { if (n.isBone) bones.push(n.name); });
-            console.log('❌ No hand bone. Names:', bones.join(', '));
-            this.handBoneName = 'NONE';
         }
 
         const mixer = new THREE.AnimationMixer(model);
@@ -463,21 +446,10 @@ class Game {
             actions[name] = mixer.clipAction(clip);
         }
 
-        const nameTag = document.createElement('div');
-        nameTag.style.cssText = `position:absolute;background:rgba(0,0,0,0.8);color:white;padding:3px 10px;border-radius:14px;font-size:12px;font-family:Arial;font-weight:bold;pointer-events:none;transform:translate(-50%,-50%);white-space:nowrap;border:2px solid #ffaa00;z-index:1000;display:none;text-shadow:1px 1px 2px black;`;
-        document.body.appendChild(nameTag);
-
-        const healthBar = document.createElement('div');
-        healthBar.style.cssText = `position:absolute;width:50px;height:6px;background:rgba(0,0,0,0.7);border-radius:3px;transform:translate(-50%,-50%);overflow:hidden;border:1px solid white;z-index:1000;display:none;`;
-        const healthFill = document.createElement('div');
-        healthFill.style.cssText = `height:100%;width:100%;background:#00ff00;transition:width 0.2s;`;
-        healthBar.appendChild(healthFill);
-        document.body.appendChild(healthBar);
-
-        return { group, model, mixer, actions, currentActionName: null, nameTag, healthBar, healthFill, isDead: false, deathPlayedAt: 0 };
+        // No name tag, no health bar — this returns just the essentials
+        return { group, model, mixer, actions, currentActionName: null, isDead: false, deathPlayedAt: 0 };
     }
 
-    // Fallback gun (tiny)
     createProceduralGun() {
         const gun = new THREE.Group();
         const black = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.4, metalness: 0.8 });
@@ -522,9 +494,7 @@ class Game {
         p.currentActionName = name;
     }
 
-    // ============ ZOOM ============
     toggleZoom() {
-        console.log('zoom toggle, current mode:', this.zoomMode);
         if (this.zoomMode === ZOOM_MODE.OFF) this.zoomMode = ZOOM_MODE.RIFLE;
         else if (this.zoomMode === ZOOM_MODE.RIFLE) this.zoomMode = ZOOM_MODE.SNIPER;
         else this.zoomMode = ZOOM_MODE.OFF;
@@ -553,7 +523,6 @@ class Game {
         }
     }
 
-    // ============ COLLISION (no ramps) ============
     isFree(x, z, feetY, headY) {
         for (const b of this.buildings) {
             const c = b.collider;
@@ -577,7 +546,6 @@ class Game {
         return best;
     }
 
-    // ============ WORLD ============
     setupLighting() {
         this.scene.add(new THREE.AmbientLight(0x606080, 0.9));
         const sun = new THREE.DirectionalLight(0xffeedd, 1.4);
@@ -676,9 +644,7 @@ class Game {
                     });
 
                     this.buildingsLoaded++;
-                }, undefined, () => {
-                    this.buildingsLoaded++;
-                });
+                }, undefined, () => { this.buildingsLoaded++; });
             }
         }
         console.log(`🏢 Loading ${BUILD_COLS * BUILD_ROWS} buildings`);
@@ -828,7 +794,6 @@ class Game {
         }
     }
 
-    // ============ ACTIONS ============
     isOnCooldown(actionName) {
         return (this.cooldowns[actionName] || 0) > Date.now();
     }
@@ -907,10 +872,8 @@ class Game {
             if (to.dot(fwd) < aimDot) return;
             this.registerHit(pid, damage);
             hitAny = true;
-            this.showNotification(`Hit ${p.data.name} -${damage}`, 'success');
         });
         if (hitAny) this.spawnHitEffect();
-        else this.showNotification('Missed', 'info');
     }
 
     spawnHitEffect() {
@@ -939,7 +902,6 @@ class Game {
         });
     }
 
-    // ============ UI ============
     setupKillFeed() {
         if (!document.getElementById('killFeed')) {
             const el = document.createElement('div');
@@ -1000,7 +962,6 @@ class Game {
     openAnimMenu() { const m = document.getElementById('animMenu'); if (m) m.classList.add('open'); }
     closeAnimMenu() { const m = document.getElementById('animMenu'); if (m) m.classList.remove('open'); }
 
-    // ============ CONTROLS ============
     setupControls() {
         const swipeZone = document.getElementById('viewSwipeZone');
         const joy = document.getElementById('joystickContainer');
@@ -1171,7 +1132,6 @@ class Game {
         ctx.beginPath(); ctx.arc(me.x, me.y, 5, 0, Math.PI * 2); ctx.fill();
     }
 
-    // ============ GAME FLOW ============
     startGame() {
         this.gameActive = true;
         this.health = 100;
@@ -1240,7 +1200,6 @@ class Game {
             const to = target.sub(origin);
             if (direction.angleTo(to) < 0.15 && to.length() < rayLen) {
                 this.registerHit(pid, this.damagePerShot);
-                this.showNotification(`Hit ${p.data.name}`, 'info');
                 break;
             }
         }
@@ -1288,8 +1247,7 @@ class Game {
                 await this.recordWin(this.lastDamagedBy.id, this.lastDamagedBy.name);
             } catch (e) {}
             this.spawnAmmoBoxOnDeath(this.playerPos, 20);
-            this.showNotification(`Killed by ${this.lastDamagedBy.name}`, 'error');
-        } else this.showNotification('You died', 'error');
+        }
 
         if (this.firebaseReady && this.playerRef) {
             await updateDoc(this.playerRef, { alive: false, health: 0 }).catch(() => {});
@@ -1375,8 +1333,6 @@ class Game {
         if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
         this.otherPlayers.forEach(p => {
             this.scene.remove(p.group);
-            if (p.nameTag && p.nameTag.parentNode) p.nameTag.remove();
-            if (p.healthBar && p.healthBar.parentNode) p.healthBar.remove();
         });
         this.otherPlayers.clear();
     }
@@ -1477,11 +1433,6 @@ class Game {
         }
         if (data.position) p.targetPosition.set(data.position.x, 0, data.position.z);
         if (data.rotation) p.targetRotation = data.rotation.y;
-        if (data.health !== undefined) {
-            const hp = Math.max(0, data.health) / 100;
-            p.healthFill.style.width = `${hp * 100}%`;
-            p.healthFill.style.background = hp > 0.6 ? '#00ff00' : hp > 0.3 ? '#ffff00' : '#ff0000';
-        }
         p.data = data;
     }
 
@@ -1501,12 +1452,9 @@ class Game {
         const p = this.otherPlayers.get(pid);
         if (!p) return;
         this.scene.remove(p.group);
-        if (p.nameTag && p.nameTag.parentNode) p.nameTag.remove();
-        if (p.healthBar && p.healthBar.parentNode) p.healthBar.remove();
         this.otherPlayers.delete(pid);
     }
 
-    // ============ MAIN LOOP ============
     animate() {
         requestAnimationFrame(() => this.animate());
         const now = Date.now();
@@ -1655,26 +1603,6 @@ class Game {
                     p.mixer.update(dt);
                 }
                 if (p.isDead && now - p.deathPlayedAt > 2500) { this.removePlayer(pid); return; }
-
-                if (p.nameTag && p.group) {
-                    const v = p.group.position.clone();
-                    v.y += 2.0;
-                    v.project(this.camera);
-                    const x = (v.x * 0.5 + 0.5) * window.innerWidth;
-                    const y = (-v.y * 0.5 + 0.5) * window.innerHeight;
-                    if (v.z < 1 && !p.isDead) {
-                        p.nameTag.textContent = p.data.name || 'Player';
-                        p.nameTag.style.display = 'block';
-                        p.nameTag.style.left = x + 'px';
-                        p.nameTag.style.top = y + 'px';
-                        p.healthBar.style.display = 'block';
-                        p.healthBar.style.left = x + 'px';
-                        p.healthBar.style.top = (y + 18) + 'px';
-                    } else {
-                        p.nameTag.style.display = 'none';
-                        p.healthBar.style.display = 'none';
-                    }
-                }
             });
 
             this.ammoBoxes.forEach(b => {
