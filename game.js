@@ -38,10 +38,13 @@ const BUILD_SPACING_Z = 42;
 const RAMP_COUNT = 24;
 const PLAYER_RADIUS = 0.4;
 
+// Zoom modes: normal → rifle zoom (shoulder) → sniper scope (first-person)
 const NORMAL_FOV = 70;
-const ZOOM_FOV = 35;
+const RIFLE_FOV = 45;
+const SNIPER_FOV = 22;
 const NORMAL_CAM_DIST = 6.5;
-const ZOOM_CAM_DIST = 2.8;
+const RIFLE_CAM_DIST = 2.5;
+const SNIPER_CAM_DIST = 0.15;
 const ZOOM_AUTO_RESET_MS = 2000;
 
 // ============ GUN SOUND ============
@@ -118,6 +121,9 @@ const KENNEY_BUILDINGS = [
     'water-tower.glb','windmill.glb','windmill-low.glb'
 ];
 
+// Zoom mode names
+const ZOOM_MODE = { OFF: 'off', RIFLE: 'rifle', SNIPER: 'sniper' };
+
 class Game {
     constructor() {
         console.log('🎮 CODM-STYLE CITY WARZONE');
@@ -137,6 +143,10 @@ class Game {
         this.glbLoaded = false;
         this.handBoneName = null;
 
+        // Real gun
+        this.gunTemplate = null;
+        this.gunLoaded = false;
+
         this.localPlayer = null;
         this.otherPlayers = new Map();
         this.lastUpdateTime = Date.now();
@@ -148,7 +158,8 @@ class Game {
         this.rollUntil = 0;
         this.rollDirection = new THREE.Vector3();
 
-        this.zoomed = false;
+        // Zoom
+        this.zoomMode = ZOOM_MODE.OFF;
         this.lastShootTime = 0;
         this.currentFov = NORMAL_FOV;
         this.currentCamDist = NORMAL_CAM_DIST;
@@ -221,14 +232,13 @@ class Game {
         this.insideBuilding = false;
         this.currentBuilding = null;
 
-        // Track building load count so we know when all are done
         this.buildingsLoaded = 0;
         this.buildingsTarget = BUILD_COLS * BUILD_ROWS;
         this.rampsPlaced = false;
 
         this.setupLighting();
         this.setupGround();
-        this.createRealisticBuildings();  // ramps placed when this finishes
+        this.createRealisticBuildings();
         this.createContainers(60);
         this.createOilBunkers(20);
         this.createSimpleEnvironment();
@@ -242,11 +252,12 @@ class Game {
         setInterval(() => this.checkNearbyDoors(), 200);
         setInterval(() => this.updateCooldownUI(), 50);
 
-        this.loadGLB().then(() => {
+        // Load soldier AND gun in parallel, then create local player
+        Promise.all([
+            this.loadGLB().catch(e => console.error('Soldier load failed:', e)),
+            this.loadGun().catch(e => console.warn('Gun load failed, using box gun:', e))
+        ]).then(() => {
             this.createLocalPlayer();
-            this.setupAuthListener();
-        }).catch(err => {
-            console.error('GLB failed:', err);
             this.setupAuthListener();
         });
 
@@ -261,24 +272,19 @@ class Game {
         window.addEventListener('beforeunload', () => this.cleanup());
     }
 
-    // ============ SVG INJECTION (no more dynamic zoom button) ============
+    // ============ SVG ============
     injectSVGIcons() {
         const map = {
             punchBtn: 'punch', kickBtn: 'kick', rollBtn: 'roll', waveBtn: 'wave',
             shootBtn: 'shoot', reloadBtn: 'reload', actionsBtn: 'bolt',
-            zoomBtn: 'zoom',  // ← now expects this in HTML
-            animMenuClose: 'close'
+            zoomBtn: 'zoom', animMenuClose: 'close'
         };
         Object.entries(map).forEach(([id, iconKey]) => {
             const el = document.getElementById(id);
-            if (!el) {
-                console.warn('Icon target not found:', id);
-                return;
-            }
+            if (!el) { console.warn('Icon target not found:', id); return; }
             el.innerHTML = `<span class="svg-icon">${SVG_ICONS[iconKey]}</span>`;
         });
 
-        // Wire up zoom button (now it exists in HTML)
         const zoomBtn = document.getElementById('zoomBtn');
         if (zoomBtn) {
             const handler = (e) => { e.preventDefault(); this.toggleZoom(); };
@@ -351,7 +357,7 @@ class Game {
         return 'Login failed: ' + (error.message || code);
     }
 
-    // ============ GLB SOLDIER ============
+    // ============ LOAD SOLDIER ============
     loadGLB() {
         return new Promise((resolve, reject) => {
             const loader = new GLTFLoader();
@@ -367,43 +373,53 @@ class Game {
                     resolve();
                 },
                 undefined,
-                (err) => { console.error('GLB load failed:', err); reject(err); }
+                (err) => { console.error('Soldier.glb load failed:', err); reject(err); }
             );
         });
     }
 
+    // ============ LOAD GUN ============
+    loadGun() {
+        return new Promise((resolve, reject) => {
+            const loader = new GLTFLoader();
+            loader.load('Rifle.glb',
+                (gltf) => {
+                    this.gunTemplate = gltf.scene;
+                    this.gunTemplate.traverse(n => {
+                        if (n.isMesh) { n.castShadow = true; n.receiveShadow = true; n.frustumCulled = false; }
+                    });
+                    console.log('✅ Rifle.glb loaded');
+                    this.gunLoaded = true;
+                    resolve();
+                },
+                undefined,
+                (err) => { console.warn('Rifle.glb not found or failed:', err.message); reject(err); }
+            );
+        });
+    }
+
+    // Fallback procedural gun if Rifle.glb not present
     createProceduralGun() {
         const gun = new THREE.Group();
         const black = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.4, metalness: 0.8 });
         const darkGrey = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.6 });
 
         const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.4, 8), black);
-        barrel.rotation.x = Math.PI / 2;
-        barrel.position.set(0, 0.02, 0.2);
-        barrel.castShadow = true;
+        barrel.rotation.x = Math.PI / 2; barrel.position.set(0, 0.02, 0.2); barrel.castShadow = true;
         gun.add(barrel);
 
         const slide = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.07, 0.3), black);
-        slide.position.set(0, 0.03, 0.1);
-        slide.castShadow = true;
+        slide.position.set(0, 0.03, 0.1); slide.castShadow = true;
         gun.add(slide);
 
         const grip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.14, 0.1), darkGrey);
-        grip.position.set(0, -0.08, -0.02);
-        grip.rotation.x = 0.25;
-        grip.castShadow = true;
+        grip.position.set(0, -0.08, -0.02); grip.rotation.x = 0.25; grip.castShadow = true;
         gun.add(grip);
-
-        const muzzle = new THREE.Mesh(
-            new THREE.SphereGeometry(0.02, 6),
-            new THREE.MeshStandardMaterial({ color: 0xffaa00, emissive: 0x442200 })
-        );
-        muzzle.position.set(0, 0.02, 0.42);
-        gun.add(muzzle);
 
         return gun;
     }
 
+    // ============ PLAYER INSTANCE ============
     createInstance() {
         if (!this.glbLoaded) return null;
         const model = SkeletonUtils.clone(this.glbBase);
@@ -412,8 +428,7 @@ class Game {
         group.add(model);
         model.scale.setScalar(1.163);
 
-        // ===== FIND THE HAND BONE =====
-        // This model uses WristR. Check common variants as fallback.
+        // Find hand bone — this model uses WristR
         const handBone = model.getObjectByName('WristR')
             || model.getObjectByName('wristR')
             || model.getObjectByName('Wrist_R')
@@ -433,17 +448,24 @@ class Game {
         if (handBone) {
             if (!this.handBoneName) console.log('✅ Hand bone:', handBone.name);
             this.handBoneName = handBone.name;
-            const gun = this.createProceduralGun();
-            // Offset so gun sits in the palm and points forward.
-            // These values are a first guess and may need tuning.
-            gun.position.set(0, 0.08, 0.05);
-            gun.rotation.set(-Math.PI / 2, 0, 0);
-            gun.scale.setScalar(0.8);
+
+            let gun;
+            if (this.gunLoaded && this.gunTemplate) {
+                gun = SkeletonUtils.clone(this.gunTemplate);
+            } else {
+                gun = this.createProceduralGun();
+            }
+
+            // Position/rotation/scale — will need tuning per-gun
+            // These are a first guess for the Poly Pizza rifle
+            gun.position.set(0, 0.05, 0.05);
+            gun.rotation.set(0, 0, 0);
+            gun.scale.setScalar(1.0);
             handBone.add(gun);
         } else if (!this.handBoneName) {
             const bones = [];
             model.traverse((n) => { if (n.isBone) bones.push(n.name); });
-            console.log('❌ No hand bone found. Names:', bones.join(', '));
+            console.log('❌ No hand bone. Names:', bones.join(', '));
             this.handBoneName = 'NONE';
         }
 
@@ -491,10 +513,41 @@ class Game {
         p.currentActionName = name;
     }
 
+    // ============ ZOOM (3 modes: off / rifle / sniper) ============
     toggleZoom() {
-        this.zoomed = !this.zoomed;
-        const btn = document.getElementById('zoomBtn');
-        if (btn) btn.classList.toggle('active', this.zoomed);
+        // Cycle: off → rifle → sniper → off
+        if (this.zoomMode === ZOOM_MODE.OFF) {
+            this.zoomMode = ZOOM_MODE.RIFLE;
+        } else if (this.zoomMode === ZOOM_MODE.RIFLE) {
+            this.zoomMode = ZOOM_MODE.SNIPER;
+        } else {
+            this.zoomMode = ZOOM_MODE.OFF;
+        }
+        this.applyZoomClasses();
+    }
+
+    applyZoomClasses() {
+        const zoomBtn = document.getElementById('zoomBtn');
+        const scope = document.getElementById('scopeOverlay');
+        const crosshair = document.getElementById('crosshair');
+        const player = this.localPlayer?.group;
+
+        if (zoomBtn) {
+            zoomBtn.classList.remove('active', 'sniper');
+            if (this.zoomMode === ZOOM_MODE.RIFLE) zoomBtn.classList.add('active');
+            if (this.zoomMode === ZOOM_MODE.SNIPER) zoomBtn.classList.add('sniper');
+        }
+        if (scope) {
+            scope.classList.toggle('visible', this.zoomMode === ZOOM_MODE.SNIPER);
+        }
+        if (crosshair) {
+            // Hide standard crosshair when scope is showing (scope has its own)
+            crosshair.style.opacity = this.zoomMode === ZOOM_MODE.SNIPER ? '0' : '1';
+        }
+        if (player) {
+            // In sniper mode, hide player model (first-person view)
+            player.visible = this.zoomMode !== ZOOM_MODE.SNIPER;
+        }
     }
 
     // ============ COLLISION ============
@@ -584,7 +637,6 @@ class Game {
         }
     }
 
-    // ============ BUILDINGS + RAMPS (fixed) ============
     createRealisticBuildings() {
         const loader = new GLTFLoader();
         const offsetX = -((BUILD_COLS - 1) * BUILD_SPACING_X) / 2;
@@ -628,13 +680,11 @@ class Game {
                     });
 
                     this.buildingsLoaded++;
-                    // Once all buildings are loaded, place the ramps
                     if (this.buildingsLoaded >= this.buildingsTarget && !this.rampsPlaced) {
                         this.rampsPlaced = true;
                         this.createRamps();
                     }
                 }, undefined, () => {
-                    // Count failures so we don't hang forever
                     this.buildingsLoaded++;
                     if (this.buildingsLoaded >= this.buildingsTarget && !this.rampsPlaced) {
                         this.rampsPlaced = true;
@@ -643,7 +693,7 @@ class Game {
                 });
             }
         }
-        console.log(`🏢 Loading ${BUILD_COLS * BUILD_ROWS} buildings, ramps will place after`);
+        console.log(`🏢 Loading ${BUILD_COLS * BUILD_ROWS} buildings`);
     }
 
     createRamps() {
@@ -659,27 +709,13 @@ class Game {
             const bW = c.max.x - c.min.x;
             const bD = c.max.z - c.min.z;
 
-            // Place ramp on one of the 4 sides of the building
             const side = Math.floor(Math.random() * 4);
             let bx, bz, rampRot = 0;
-            const off = 6; // distance from building center to ramp center
-            if (side === 0) { // north
-                bx = c.min.x + bW * 0.5;
-                bz = c.min.z - off;
-                rampRot = Math.PI / 2;
-            } else if (side === 1) { // south
-                bx = c.min.x + bW * 0.5;
-                bz = c.max.z + off;
-                rampRot = -Math.PI / 2;
-            } else if (side === 2) { // west
-                bx = c.min.x - off;
-                bz = c.min.z + bD * 0.5;
-                rampRot = 0;
-            } else { // east
-                bx = c.max.x + off;
-                bz = c.min.z + bD * 0.5;
-                rampRot = Math.PI;
-            }
+            const off = 6;
+            if (side === 0) { bx = c.min.x + bW * 0.5; bz = c.min.z - off; rampRot = Math.PI / 2; }
+            else if (side === 1) { bx = c.min.x + bW * 0.5; bz = c.max.z + off; rampRot = -Math.PI / 2; }
+            else if (side === 2) { bx = c.min.x - off; bz = c.min.z + bD * 0.5; rampRot = 0; }
+            else { bx = c.max.x + off; bz = c.min.z + bD * 0.5; rampRot = Math.PI; }
 
             const rampLength = 10;
             const rampWidth = 3;
@@ -689,9 +725,6 @@ class Game {
             const ramp = new THREE.Mesh(box, woodMat);
             const slopeAngle = Math.atan2(rampHeight, rampLength);
 
-            // Store the ramp's local axes so surface Y is computed correctly
-            // regardless of rotation. For simplicity, we treat the ramp as
-            // sloping along its local +X axis (toward the building).
             ramp.position.set(bx, rampHeight / 2, bz);
             ramp.rotation.y = rampRot;
             ramp.rotation.z = -slopeAngle;
@@ -699,31 +732,24 @@ class Game {
             ramp.receiveShadow = true;
             this.scene.add(ramp);
 
-            // Compute bounding box for footprint check (axis-aligned)
             const rbb = new THREE.Box3().setFromObject(ramp);
-
-            // Slope direction is the local +X axis rotated by rampRot
             const dirX = Math.cos(rampRot);
             const dirZ = -Math.sin(rampRot);
 
-            const rampData = {
+            this.ramps.push({
                 mesh: ramp,
                 collider: new THREE.Box3(
                     new THREE.Vector3(rbb.min.x, 0, rbb.min.z),
                     new THREE.Vector3(rbb.max.x, rampHeight, rbb.max.z)
                 ),
                 computeSurfaceY: (px, pz) => {
-                    // Project point onto the slope direction
                     const dx = px - bx;
                     const dz = pz - bz;
-                    // Local offset along slope direction
                     const along = dx * dirX + dz * dirZ;
-                    // Ramp runs from -rampLength/2 (low) to +rampLength/2 (high, near building)
                     const t = (along + rampLength / 2) / rampLength;
                     return Math.max(0, Math.min(rampHeight, t * rampHeight));
                 }
-            };
-            this.ramps.push(rampData);
+            });
             placed++;
         }
         console.log(`🪜 Placed ${placed} ramps`);
@@ -1091,7 +1117,8 @@ class Game {
             for (let i = 0; i < e.touches.length; i++) {
                 if (e.touches[i].identifier === this.swipeTouchId) {
                     const t = e.touches[i];
-                    const sens = this.zoomed ? this.touchSensitivity * 0.4 : this.touchSensitivity;
+                    // Slower sensitivity in zoom
+                    const sens = this.zoomMode !== ZOOM_MODE.OFF ? this.touchSensitivity * 0.4 : this.touchSensitivity;
                     this.playerYaw -= (t.clientX - this.lastSwipeX) * sens;
                     this.lookPitch -= (t.clientY - this.lastSwipeY) * sens;
                     this.lookPitch = Math.max(-0.5, Math.min(0.6, this.lookPitch));
@@ -1236,7 +1263,8 @@ class Game {
         this.velocityY = 0;
         this.onGround = true;
         this.cooldowns = {};
-        this.zoomed = false;
+        this.zoomMode = ZOOM_MODE.OFF;
+        this.applyZoomClasses();
 
         if (this.firebaseReady && this.playerRef) {
             updateDoc(this.playerRef, {
@@ -1264,7 +1292,7 @@ class Game {
         raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
         const origin = raycaster.ray.origin.clone();
         const direction = raycaster.ray.direction.clone();
-        const rayLen = 80;
+        const rayLen = 200;
 
         for (let i = this.ammoBoxes.length - 1; i >= 0; i--) {
             const b = this.ammoBoxes[i];
@@ -1331,7 +1359,7 @@ class Game {
                 await addDoc(collection(db, 'game_kills'), {
                     killerId: this.lastDamagedBy.id, killerName: this.lastDamagedBy.name,
                     victimId: this.playerId, victimName: this.playerName,
-                    weapon: 'Pistol', timestamp: serverTimestamp()
+                    weapon: 'Rifle', timestamp: serverTimestamp()
                 });
                 await updateDoc(doc(this.playersCollection, this.lastDamagedBy.id), { kills: increment(1) });
                 await this.recordWin(this.lastDamagedBy.id, this.lastDamagedBy.name);
@@ -1403,7 +1431,8 @@ class Game {
         this.playerYaw = 0; this.lookPitch = 0;
         this.playerY = 0; this.velocityY = 0; this.onGround = true;
         this.cooldowns = {};
-        this.zoomed = false;
+        this.zoomMode = ZOOM_MODE.OFF;
+        this.applyZoomClasses();
 
         if (this.localPlayer) this.playAnim(this.localPlayer, 'Idle_Gun', { fade: 0.1 });
         if (this.firebaseReady && this.playerRef) {
@@ -1562,13 +1591,30 @@ class Game {
         this.lastUpdateTime = now;
 
         if (this.gameActive) {
-            if (this.zoomed && now - this.lastShootTime > ZOOM_AUTO_RESET_MS && this.lastShootTime > 0) {
-                this.zoomed = false;
-                const btn = document.getElementById('zoomBtn');
-                if (btn) btn.classList.remove('active');
+            // Zoom auto-reset
+            if (this.zoomMode !== ZOOM_MODE.OFF && now - this.lastShootTime > ZOOM_AUTO_RESET_MS && this.lastShootTime > 0) {
+                this.zoomMode = ZOOM_MODE.OFF;
+                this.applyZoomClasses();
             }
-            const targetFov = this.zoomed ? ZOOM_FOV : NORMAL_FOV;
-            const targetDist = this.zoomed ? ZOOM_CAM_DIST : NORMAL_CAM_DIST;
+
+            // Camera params per zoom mode
+            let targetFov = NORMAL_FOV;
+            let targetDist = NORMAL_CAM_DIST;
+            let camHeightNow = this.camHeight;
+            let camLookHeightNow = this.camLookHeight;
+
+            if (this.zoomMode === ZOOM_MODE.RIFLE) {
+                targetFov = RIFLE_FOV;
+                targetDist = RIFLE_CAM_DIST;
+                camHeightNow = 2.0;
+                camLookHeightNow = 1.3;
+            } else if (this.zoomMode === ZOOM_MODE.SNIPER) {
+                targetFov = SNIPER_FOV;
+                targetDist = SNIPER_CAM_DIST;
+                camHeightNow = 1.7;
+                camLookHeightNow = 1.7;
+            }
+
             this.currentFov += (targetFov - this.currentFov) * 0.15;
             this.currentCamDist += (targetDist - this.currentCamDist) * 0.15;
             this.camera.fov = this.currentFov;
@@ -1578,7 +1624,7 @@ class Game {
             const rightDir = new THREE.Vector3(Math.cos(this.playerYaw), 0, -Math.sin(this.playerYaw));
 
             const moveDelta = new THREE.Vector3();
-            const zoomSlow = this.zoomed ? 0.55 : 1.0;
+            const zoomSlow = this.zoomMode !== ZOOM_MODE.OFF ? 0.55 : 1.0;
 
             if (Math.abs(this.moveY) > 0.05) {
                 const mult = this.moveY > 0 ? this.sprintMultiplier : this.backwardMultiplier;
@@ -1642,7 +1688,7 @@ class Game {
                     this.overrideAnim = null;
                     if (this.rolling) anim = 'Roll';
                     else if (speed > 0.03) anim = 'Run';
-                    else if (this.zoomed) anim = 'Idle_Gun_Pointing';
+                    else if (this.zoomMode !== ZOOM_MODE.OFF) anim = 'Idle_Gun_Pointing';
                     else anim = 'Idle_Gun';
                 }
 
@@ -1655,16 +1701,17 @@ class Game {
                 this.localPlayer.mixer.update(dt);
             }
 
+            // Camera position
             const camPos = new THREE.Vector3(
                 this.playerPos.x,
-                this.playerY + this.camHeight,
+                this.playerY + camHeightNow,
                 this.playerPos.z
             ).add(forwardDir.clone().multiplyScalar(-this.currentCamDist));
             this.camera.position.copy(camPos);
 
             const lookTarget = new THREE.Vector3(
                 this.playerPos.x,
-                this.playerY + this.camLookHeight,
+                this.playerY + camLookHeightNow,
                 this.playerPos.z
             );
             lookTarget.add(forwardDir.clone().multiplyScalar(3));

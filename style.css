@@ -740,3 +740,65 @@ html, body {
     margin-top: 12px;
     min-height: 16px;
 }
+
+/* ===== SNIPER SCOPE ===== */
+#scopeOverlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 400;
+    display: none;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+#scopeOverlay.visible {
+    display: block;
+    opacity: 1;
+    /* Black out everything except a big circle in the center */
+    background: radial-gradient(circle at center,
+        transparent 0,
+        transparent 32vh,
+        rgba(0,0,0,0.85) 33vh,
+        rgba(0,0,0,0.98) 40vh,
+        #000 100%);
+}
+
+.scope-ring {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 64vh;
+    height: 64vh;
+    border-radius: 50%;
+    border: 6px solid #1e5fa8;
+    box-shadow:
+        0 0 20px rgba(30, 95, 168, 0.9),
+        inset 0 0 30px rgba(30, 95, 168, 0.6);
+}
+
+.scope-crosshair-h,
+.scope-crosshair-v {
+    position: absolute;
+    background: #ffffff;
+    opacity: 0.85;
+    box-shadow: 0 0 4px rgba(0,0,0,0.9);
+}
+.scope-crosshair-h {
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 60vh;
+    height: 1.5px;
+}
+.scope-crosshair-v {
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 1.5px;
+    height: 60vh;
+}
+
+#zoomBtn.sniper {
+    background: rgba(255, 100, 0, 0.9);
+    border-color: #ffaa44;
+    box-shadow: 0 0 20px rgba(255, 150, 0, 0.7);
+}
