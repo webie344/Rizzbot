@@ -35,17 +35,18 @@ const BUILD_COLS = 10;
 const BUILD_ROWS = 8;
 const BUILD_SPACING_X = 38;
 const BUILD_SPACING_Z = 42;
-const RAMP_COUNT = 24;
 const PLAYER_RADIUS = 0.4;
 
-// Zoom modes: normal → rifle zoom (shoulder) → sniper scope (first-person)
+// Zoom — closer camera so player is not tiny
 const NORMAL_FOV = 70;
 const RIFLE_FOV = 45;
 const SNIPER_FOV = 22;
-const NORMAL_CAM_DIST = 6.5;
-const RIFLE_CAM_DIST = 2.5;
+const NORMAL_CAM_DIST = 3.0;
+const RIFLE_CAM_DIST = 1.8;
 const SNIPER_CAM_DIST = 0.15;
 const ZOOM_AUTO_RESET_MS = 2000;
+
+const ZOOM_MODE = { OFF: 'off', RIFLE: 'rifle', SNIPER: 'sniper' };
 
 // ============ GUN SOUND ============
 function playGunSound() {
@@ -121,9 +122,6 @@ const KENNEY_BUILDINGS = [
     'water-tower.glb','windmill.glb','windmill-low.glb'
 ];
 
-// Zoom mode names
-const ZOOM_MODE = { OFF: 'off', RIFLE: 'rifle', SNIPER: 'sniper' };
-
 class Game {
     constructor() {
         console.log('🎮 CODM-STYLE CITY WARZONE');
@@ -143,7 +141,6 @@ class Game {
         this.glbLoaded = false;
         this.handBoneName = null;
 
-        // Real gun
         this.gunTemplate = null;
         this.gunLoaded = false;
 
@@ -158,7 +155,6 @@ class Game {
         this.rollUntil = 0;
         this.rollDirection = new THREE.Vector3();
 
-        // Zoom
         this.zoomMode = ZOOM_MODE.OFF;
         this.lastShootTime = 0;
         this.currentFov = NORMAL_FOV;
@@ -194,8 +190,8 @@ class Game {
         this.gameActive = false;
         this._shootFlashUntil = 0;
 
-        this.camHeight = 3.2;
-        this.camLookHeight = 1.1;
+        this.camHeight = 2.0;
+        this.camLookHeight = 1.2;
 
         this.playerPos = new THREE.Vector3(0, 0, 30);
         this.playerYaw = 0;
@@ -222,7 +218,6 @@ class Game {
         this.lastSwipeY = 0;
 
         this.buildings = [];
-        this.ramps = [];
         this.containers = [];
         this.oilBunkers = [];
         this.ammoBoxes = [];
@@ -234,7 +229,6 @@ class Game {
 
         this.buildingsLoaded = 0;
         this.buildingsTarget = BUILD_COLS * BUILD_ROWS;
-        this.rampsPlaced = false;
 
         this.setupLighting();
         this.setupGround();
@@ -252,10 +246,9 @@ class Game {
         setInterval(() => this.checkNearbyDoors(), 200);
         setInterval(() => this.updateCooldownUI(), 50);
 
-        // Load soldier AND gun in parallel, then create local player
         Promise.all([
             this.loadGLB().catch(e => console.error('Soldier load failed:', e)),
-            this.loadGun().catch(e => console.warn('Gun load failed, using box gun:', e))
+            this.loadGun().catch(e => console.warn('Gun load failed:', e.message))
         ]).then(() => {
             this.createLocalPlayer();
             this.setupAuthListener();
@@ -272,7 +265,7 @@ class Game {
         window.addEventListener('beforeunload', () => this.cleanup());
     }
 
-    // ============ SVG ============
+    // ============ SVG INJECTION ============
     injectSVGIcons() {
         const map = {
             punchBtn: 'punch', kickBtn: 'kick', rollBtn: 'roll', waveBtn: 'wave',
@@ -281,7 +274,7 @@ class Game {
         };
         Object.entries(map).forEach(([id, iconKey]) => {
             const el = document.getElementById(id);
-            if (!el) { console.warn('Icon target not found:', id); return; }
+            if (!el) return;
             el.innerHTML = `<span class="svg-icon">${SVG_ICONS[iconKey]}</span>`;
         });
 
@@ -388,6 +381,21 @@ class Game {
                     this.gunTemplate.traverse(n => {
                         if (n.isMesh) { n.castShadow = true; n.receiveShadow = true; n.frustumCulled = false; }
                     });
+
+                    // Auto-scale gun to a sane size relative to the soldier (~0.9 units long)
+                    const box = new THREE.Box3().setFromObject(this.gunTemplate);
+                    const size = box.getSize(new THREE.Vector3());
+                    const maxDim = Math.max(size.x, size.y, size.z);
+                    if (maxDim > 0) {
+                        const targetLength = 0.9;
+                        const scale = targetLength / maxDim;
+                        this.gunTemplate.scale.setScalar(scale);
+                    }
+                    // Recenter origin at the gun's bounding box center
+                    const box2 = new THREE.Box3().setFromObject(this.gunTemplate);
+                    const center = box2.getCenter(new THREE.Vector3());
+                    this.gunTemplate.position.sub(center);
+
                     console.log('✅ Rifle.glb loaded');
                     this.gunLoaded = true;
                     resolve();
@@ -396,27 +404,6 @@ class Game {
                 (err) => { console.warn('Rifle.glb not found or failed:', err.message); reject(err); }
             );
         });
-    }
-
-    // Fallback procedural gun if Rifle.glb not present
-    createProceduralGun() {
-        const gun = new THREE.Group();
-        const black = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.4, metalness: 0.8 });
-        const darkGrey = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.6 });
-
-        const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.4, 8), black);
-        barrel.rotation.x = Math.PI / 2; barrel.position.set(0, 0.02, 0.2); barrel.castShadow = true;
-        gun.add(barrel);
-
-        const slide = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.07, 0.3), black);
-        slide.position.set(0, 0.03, 0.1); slide.castShadow = true;
-        gun.add(slide);
-
-        const grip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.14, 0.1), darkGrey);
-        grip.position.set(0, -0.08, -0.02); grip.rotation.x = 0.25; grip.castShadow = true;
-        gun.add(grip);
-
-        return gun;
     }
 
     // ============ PLAYER INSTANCE ============
@@ -428,7 +415,6 @@ class Game {
         group.add(model);
         model.scale.setScalar(1.163);
 
-        // Find hand bone — this model uses WristR
         const handBone = model.getObjectByName('WristR')
             || model.getObjectByName('wristR')
             || model.getObjectByName('Wrist_R')
@@ -452,15 +438,17 @@ class Game {
             let gun;
             if (this.gunLoaded && this.gunTemplate) {
                 gun = SkeletonUtils.clone(this.gunTemplate);
+                // Gun is already auto-scaled and recentered in loadGun().
+                // Position is set so the grip ends up at the wrist.
+                gun.position.set(0, 0, 0);
+                gun.rotation.set(0, 0, 0);
+                gun.scale.setScalar(1.0);
             } else {
+                // Fallback tiny procedural gun
                 gun = this.createProceduralGun();
+                gun.position.set(0, 0.05, 0.05);
+                gun.scale.setScalar(0.5);
             }
-
-            // Position/rotation/scale — will need tuning per-gun
-            // These are a first guess for the Poly Pizza rifle
-            gun.position.set(0, 0.05, 0.05);
-            gun.rotation.set(0, 0, 0);
-            gun.scale.setScalar(1.0);
             handBone.add(gun);
         } else if (!this.handBoneName) {
             const bones = [];
@@ -489,6 +477,27 @@ class Game {
         return { group, model, mixer, actions, currentActionName: null, nameTag, healthBar, healthFill, isDead: false, deathPlayedAt: 0 };
     }
 
+    // Fallback gun (tiny)
+    createProceduralGun() {
+        const gun = new THREE.Group();
+        const black = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.4, metalness: 0.8 });
+        const darkGrey = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.6 });
+
+        const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.4, 8), black);
+        barrel.rotation.x = Math.PI / 2; barrel.position.set(0, 0.02, 0.2); barrel.castShadow = true;
+        gun.add(barrel);
+
+        const slide = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.07, 0.3), black);
+        slide.position.set(0, 0.03, 0.1); slide.castShadow = true;
+        gun.add(slide);
+
+        const grip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.14, 0.1), darkGrey);
+        grip.position.set(0, -0.08, -0.02); grip.rotation.x = 0.25; grip.castShadow = true;
+        gun.add(grip);
+
+        return gun;
+    }
+
     createLocalPlayer() {
         const inst = this.createInstance();
         if (!inst) return;
@@ -513,16 +522,12 @@ class Game {
         p.currentActionName = name;
     }
 
-    // ============ ZOOM (3 modes: off / rifle / sniper) ============
+    // ============ ZOOM ============
     toggleZoom() {
-        // Cycle: off → rifle → sniper → off
-        if (this.zoomMode === ZOOM_MODE.OFF) {
-            this.zoomMode = ZOOM_MODE.RIFLE;
-        } else if (this.zoomMode === ZOOM_MODE.RIFLE) {
-            this.zoomMode = ZOOM_MODE.SNIPER;
-        } else {
-            this.zoomMode = ZOOM_MODE.OFF;
-        }
+        console.log('zoom toggle, current mode:', this.zoomMode);
+        if (this.zoomMode === ZOOM_MODE.OFF) this.zoomMode = ZOOM_MODE.RIFLE;
+        else if (this.zoomMode === ZOOM_MODE.RIFLE) this.zoomMode = ZOOM_MODE.SNIPER;
+        else this.zoomMode = ZOOM_MODE.OFF;
         this.applyZoomClasses();
     }
 
@@ -541,16 +546,14 @@ class Game {
             scope.classList.toggle('visible', this.zoomMode === ZOOM_MODE.SNIPER);
         }
         if (crosshair) {
-            // Hide standard crosshair when scope is showing (scope has its own)
             crosshair.style.opacity = this.zoomMode === ZOOM_MODE.SNIPER ? '0' : '1';
         }
         if (player) {
-            // In sniper mode, hide player model (first-person view)
             player.visible = this.zoomMode !== ZOOM_MODE.SNIPER;
         }
     }
 
-    // ============ COLLISION ============
+    // ============ COLLISION (no ramps) ============
     isFree(x, z, feetY, headY) {
         for (const b of this.buildings) {
             const c = b.collider;
@@ -570,12 +573,6 @@ class Game {
             if (x + PLAYER_RADIUS < c.min.x || x - PLAYER_RADIUS > c.max.x) continue;
             if (z + PLAYER_RADIUS < c.min.z || z - PLAYER_RADIUS > c.max.z) continue;
             if (c.max.y > best && c.max.y <= currentY + 0.5) best = c.max.y;
-        }
-        for (const r of this.ramps) {
-            const c = r.collider;
-            if (x < c.min.x || x > c.max.x || z < c.min.z || z > c.max.z) continue;
-            const t = r.computeSurfaceY(x, z);
-            if (t > best && t <= currentY + 0.6) best = t;
         }
         return best;
     }
@@ -644,7 +641,6 @@ class Game {
 
         this.buildingsTarget = BUILD_COLS * BUILD_ROWS;
         this.buildingsLoaded = 0;
-        this.rampsPlaced = false;
 
         for (let r = 0; r < BUILD_ROWS; r++) {
             for (let c = 0; c < BUILD_COLS; c++) {
@@ -680,79 +676,12 @@ class Game {
                     });
 
                     this.buildingsLoaded++;
-                    if (this.buildingsLoaded >= this.buildingsTarget && !this.rampsPlaced) {
-                        this.rampsPlaced = true;
-                        this.createRamps();
-                    }
                 }, undefined, () => {
                     this.buildingsLoaded++;
-                    if (this.buildingsLoaded >= this.buildingsTarget && !this.rampsPlaced) {
-                        this.rampsPlaced = true;
-                        this.createRamps();
-                    }
                 });
             }
         }
         console.log(`🏢 Loading ${BUILD_COLS * BUILD_ROWS} buildings`);
-    }
-
-    createRamps() {
-        const woodMat = new THREE.MeshStandardMaterial({ color: 0x8B5A2B, roughness: 0.85 });
-        let placed = 0;
-        let attempts = 0;
-
-        while (placed < RAMP_COUNT && attempts < 800) {
-            attempts++;
-            if (this.buildings.length === 0) break;
-            const b = this.buildings[Math.floor(Math.random() * this.buildings.length)];
-            const c = b.collider;
-            const bW = c.max.x - c.min.x;
-            const bD = c.max.z - c.min.z;
-
-            const side = Math.floor(Math.random() * 4);
-            let bx, bz, rampRot = 0;
-            const off = 6;
-            if (side === 0) { bx = c.min.x + bW * 0.5; bz = c.min.z - off; rampRot = Math.PI / 2; }
-            else if (side === 1) { bx = c.min.x + bW * 0.5; bz = c.max.z + off; rampRot = -Math.PI / 2; }
-            else if (side === 2) { bx = c.min.x - off; bz = c.min.z + bD * 0.5; rampRot = 0; }
-            else { bx = c.max.x + off; bz = c.min.z + bD * 0.5; rampRot = Math.PI; }
-
-            const rampLength = 10;
-            const rampWidth = 3;
-            const rampHeight = Math.min(6, b.topY);
-
-            const box = new THREE.BoxGeometry(rampLength, 0.4, rampWidth);
-            const ramp = new THREE.Mesh(box, woodMat);
-            const slopeAngle = Math.atan2(rampHeight, rampLength);
-
-            ramp.position.set(bx, rampHeight / 2, bz);
-            ramp.rotation.y = rampRot;
-            ramp.rotation.z = -slopeAngle;
-            ramp.castShadow = true;
-            ramp.receiveShadow = true;
-            this.scene.add(ramp);
-
-            const rbb = new THREE.Box3().setFromObject(ramp);
-            const dirX = Math.cos(rampRot);
-            const dirZ = -Math.sin(rampRot);
-
-            this.ramps.push({
-                mesh: ramp,
-                collider: new THREE.Box3(
-                    new THREE.Vector3(rbb.min.x, 0, rbb.min.z),
-                    new THREE.Vector3(rbb.max.x, rampHeight, rbb.max.z)
-                ),
-                computeSurfaceY: (px, pz) => {
-                    const dx = px - bx;
-                    const dz = pz - bz;
-                    const along = dx * dirX + dz * dirZ;
-                    const t = (along + rampLength / 2) / rampLength;
-                    return Math.max(0, Math.min(rampHeight, t * rampHeight));
-                }
-            });
-            placed++;
-        }
-        console.log(`🪜 Placed ${placed} ramps`);
     }
 
     createContainers(count) {
@@ -1117,7 +1046,6 @@ class Game {
             for (let i = 0; i < e.touches.length; i++) {
                 if (e.touches[i].identifier === this.swipeTouchId) {
                     const t = e.touches[i];
-                    // Slower sensitivity in zoom
                     const sens = this.zoomMode !== ZOOM_MODE.OFF ? this.touchSensitivity * 0.4 : this.touchSensitivity;
                     this.playerYaw -= (t.clientX - this.lastSwipeX) * sens;
                     this.lookPitch -= (t.clientY - this.lastSwipeY) * sens;
@@ -1230,11 +1158,6 @@ class Game {
         this.oilBunkers.forEach(b => {
             const p = toMap(b.position.x, b.position.z);
             ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill();
-        });
-        ctx.fillStyle = '#9c6b3a';
-        this.ramps.forEach(r => {
-            const p = toMap(r.mesh.position.x, r.mesh.position.z);
-            ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
         });
         this.otherPlayers.forEach(p => {
             const m = toMap(p.group.position.x, p.group.position.z);
@@ -1591,13 +1514,11 @@ class Game {
         this.lastUpdateTime = now;
 
         if (this.gameActive) {
-            // Zoom auto-reset
             if (this.zoomMode !== ZOOM_MODE.OFF && now - this.lastShootTime > ZOOM_AUTO_RESET_MS && this.lastShootTime > 0) {
                 this.zoomMode = ZOOM_MODE.OFF;
                 this.applyZoomClasses();
             }
 
-            // Camera params per zoom mode
             let targetFov = NORMAL_FOV;
             let targetDist = NORMAL_CAM_DIST;
             let camHeightNow = this.camHeight;
@@ -1606,7 +1527,7 @@ class Game {
             if (this.zoomMode === ZOOM_MODE.RIFLE) {
                 targetFov = RIFLE_FOV;
                 targetDist = RIFLE_CAM_DIST;
-                camHeightNow = 2.0;
+                camHeightNow = 1.9;
                 camLookHeightNow = 1.3;
             } else if (this.zoomMode === ZOOM_MODE.SNIPER) {
                 targetFov = SNIPER_FOV;
@@ -1655,7 +1576,6 @@ class Game {
             this.playerPos.z = Math.max(-MAP_HALF + 2, Math.min(MAP_HALF - 2, this.playerPos.z));
 
             const groundY = this.getGroundY(this.playerPos.x, this.playerPos.z, this.playerY);
-
             if (this.playerY > groundY + 0.05) {
                 this.velocityY -= 0.03;
                 if (this.velocityY < -0.8) this.velocityY = -0.8;
@@ -1666,10 +1586,6 @@ class Game {
                     this.velocityY = 0;
                     this.onGround = true;
                 }
-            } else if (this.playerY < groundY - 0.05) {
-                this.playerY = groundY;
-                this.velocityY = 0;
-                this.onGround = true;
             } else {
                 this.playerY = groundY;
                 this.velocityY = 0;
@@ -1701,7 +1617,6 @@ class Game {
                 this.localPlayer.mixer.update(dt);
             }
 
-            // Camera position
             const camPos = new THREE.Vector3(
                 this.playerPos.x,
                 this.playerY + camHeightNow,
