@@ -237,7 +237,6 @@ class Game {
         this.setupControls();
         this.setupMinimap();
         this.buildAnimMenu();
-        this.setupKillFeed();
         this.injectSVGIcons();
 
         setInterval(() => this.checkNearbyDoors(), 200);
@@ -399,7 +398,6 @@ class Game {
                         this.gunTemplate.scale.setScalar(targetScale);
                     }
 
-                    // Recenter so grip end is at origin (barrel extends forward)
                     const finalBox = new THREE.Box3().setFromObject(this.gunTemplate);
                     const center = finalBox.getCenter(new THREE.Vector3());
                     this.gunTemplate.position.sub(center);
@@ -445,8 +443,8 @@ class Game {
             let gun;
             if (this.gunLoaded && this.gunTemplate) {
                 gun = SkeletonUtils.clone(this.gunTemplate);
-                // Shift gun forward so the grip lands in the palm, not the barrel center
-                gun.position.set(0, 0, -0.35);
+                // Reset to original offset — gun sits near hand
+                gun.position.set(0, 0.05, 0.05);
                 gun.rotation.set(0, 0, 0);
             } else {
                 gun = this.createProceduralGun();
@@ -917,41 +915,8 @@ class Game {
         });
     }
 
-    setupKillFeed() {
-        if (!document.getElementById('killFeed')) {
-            const el = document.createElement('div');
-            el.id = 'killFeed';
-            el.style.cssText = `position:fixed;top:220px;right:15px;width:250px;z-index:1000;pointer-events:none;`;
-            document.body.appendChild(el);
-        }
-        this.killFeedElement = document.getElementById('killFeed');
-        this.killMessages = [];
-    }
-
-    addKillToFeed(killData) {
-        this.killMessages.unshift({
-            killer: killData.killerName || 'Unknown',
-            victim: killData.victimName || 'Unknown'
-        });
-        if (this.killMessages.length > 5) this.killMessages.pop();
-        this.updateKillFeed();
-        if (killData.victimId === this.playerId) {
-            this.showNotification(`Killed by ${killData.killerName}`, 'error');
-        } else if (killData.killerId === this.playerId) {
-            this.showNotification(`You killed ${killData.victimName}!`, 'success');
-            this.kills++; this.score += 100; this.updateUI();
-        }
-    }
-
-    updateKillFeed() {
-        if (!this.killFeedElement) return;
-        this.killFeedElement.innerHTML = '';
-        this.killMessages.forEach(m => {
-            const d = document.createElement('div');
-            d.style.cssText = `background:rgba(0,0,0,0.8);color:white;padding:5px 10px;margin-bottom:4px;border-radius:16px;font-size:12px;font-weight:bold;border-left:3px solid #ff4444;text-align:center;`;
-            d.innerHTML = `<span style="color:#ffaa00">${m.killer}</span> killed <span style="color:#ff4444">${m.victim}</span>`;
-            this.killFeedElement.appendChild(d);
-        });
+    addKillToFeed() {
+        // Kill feed removed — no-op
     }
 
     showNotification(msg, type = 'info') {
@@ -1246,7 +1211,6 @@ class Game {
         if (this.localPlayer && this.health > 0) this.playOverride('HitRecieve', 400);
         if (this.firebaseReady && this.playerRef) updateDoc(this.playerRef, { health: this.health }).catch(() => {});
         if (this.health <= 0) this.die();
-        else this.showNotification(`-${amount} HP`, 'error');
     }
 
     async die() {
@@ -1403,11 +1367,7 @@ class Game {
             }, e => {});
 
             if (this.killsCollection) {
-                onSnapshot(query(this.killsCollection, orderBy('timestamp', 'desc'), limit(20)), (snap) => {
-                    snap.docChanges().forEach(change => {
-                        if (change.type === 'added') this.addKillToFeed(change.doc.data());
-                    });
-                }, e => {});
+                // Kill feed listener removed
             }
 
             this.heartbeatInterval = setInterval(() => {
@@ -1480,7 +1440,6 @@ class Game {
         this.lastUpdateTime = now;
 
         if (this.gameActive) {
-            // FIXED: only reset zoom if we zoomed, shot once, and 2s passed
             if (this.zoomMode !== ZOOM_MODE.OFF
                 && this._resetZoomArmed
                 && now - this.lastShootTime > ZOOM_AUTO_RESET_MS) {
