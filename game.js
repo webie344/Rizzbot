@@ -122,7 +122,6 @@ class Game {
     constructor() {
         console.log('🎮 CODM-STYLE CITY WARZONE');
 
-        // Firebase
         this.currentUser = null;
         this.playerId = null;
         this.playerName = 'Player_' + Math.floor(Math.random() * 10000);
@@ -133,7 +132,6 @@ class Game {
         this.heartbeatInterval = null;
         this.firebaseReady = false;
 
-        // GLB
         this.glbBase = null;
         this.glbAnimations = {};
         this.glbLoaded = false;
@@ -150,18 +148,15 @@ class Game {
         this.rollUntil = 0;
         this.rollDirection = new THREE.Vector3();
 
-        // Zoom
         this.zoomed = false;
         this.lastShootTime = 0;
         this.currentFov = NORMAL_FOV;
         this.currentCamDist = NORMAL_CAM_DIST;
 
-        // Vertical physics
         this.velocityY = 0;
         this.onGround = true;
         this.playerY = 0;
 
-        // Scene
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(0x87CEEB);
         this.scene.fog = new THREE.Fog(0x87CEEB, FOG_NEAR, FOG_FAR);
@@ -177,7 +172,6 @@ class Game {
         if (cont) cont.appendChild(this.renderer.domElement);
         else document.body.appendChild(this.renderer.domElement);
 
-        // State
         this.health = 100;
         this.maxHealth = 100;
         this.damagePerShot = 33;
@@ -227,10 +221,14 @@ class Game {
         this.insideBuilding = false;
         this.currentBuilding = null;
 
+        // Track building load count so we know when all are done
+        this.buildingsLoaded = 0;
+        this.buildingsTarget = BUILD_COLS * BUILD_ROWS;
+        this.rampsPlaced = false;
+
         this.setupLighting();
         this.setupGround();
-        this.createRealisticBuildings();
-        this.createRamps();
+        this.createRealisticBuildings();  // ramps placed when this finishes
         this.createContainers(60);
         this.createOilBunkers(20);
         this.createSimpleEnvironment();
@@ -263,27 +261,26 @@ class Game {
         window.addEventListener('beforeunload', () => this.cleanup());
     }
 
-    // ============ SVG INJECTION ============
+    // ============ SVG INJECTION (no more dynamic zoom button) ============
     injectSVGIcons() {
         const map = {
             punchBtn: 'punch', kickBtn: 'kick', rollBtn: 'roll', waveBtn: 'wave',
             shootBtn: 'shoot', reloadBtn: 'reload', actionsBtn: 'bolt',
+            zoomBtn: 'zoom',  // ← now expects this in HTML
             animMenuClose: 'close'
         };
         Object.entries(map).forEach(([id, iconKey]) => {
             const el = document.getElementById(id);
-            if (!el) return;
+            if (!el) {
+                console.warn('Icon target not found:', id);
+                return;
+            }
             el.innerHTML = `<span class="svg-icon">${SVG_ICONS[iconKey]}</span>`;
         });
 
-        if (!document.getElementById('zoomBtn')) {
-            const zoomBtn = document.createElement('div');
-            zoomBtn.id = 'zoomBtn';
-            zoomBtn.className = 'action-btn';
-            zoomBtn.innerHTML = `<span class="svg-icon">${SVG_ICONS.zoom}</span>`;
-            const actionsContainer = document.getElementById('actionButtons');
-            if (actionsContainer) actionsContainer.appendChild(zoomBtn);
-
+        // Wire up zoom button (now it exists in HTML)
+        const zoomBtn = document.getElementById('zoomBtn');
+        if (zoomBtn) {
             const handler = (e) => { e.preventDefault(); this.toggleZoom(); };
             zoomBtn.addEventListener('click', handler);
             zoomBtn.addEventListener('touchstart', handler);
@@ -296,7 +293,6 @@ class Game {
         if (overlay) overlay.style.display = 'flex';
         this.bindLoginForm();
     }
-
     hideLoginScreen() {
         const overlay = document.getElementById('loginOverlay');
         if (overlay) overlay.style.display = 'none';
@@ -382,15 +378,20 @@ class Game {
         const darkGrey = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.6 });
 
         const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.4, 8), black);
-        barrel.rotation.x = Math.PI / 2; barrel.position.set(0, 0.02, 0.2); barrel.castShadow = true;
+        barrel.rotation.x = Math.PI / 2;
+        barrel.position.set(0, 0.02, 0.2);
+        barrel.castShadow = true;
         gun.add(barrel);
 
         const slide = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.07, 0.3), black);
-        slide.position.set(0, 0.03, 0.1); slide.castShadow = true;
+        slide.position.set(0, 0.03, 0.1);
+        slide.castShadow = true;
         gun.add(slide);
 
         const grip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.14, 0.1), darkGrey);
-        grip.position.set(0, -0.08, -0.02); grip.rotation.x = 0.25; grip.castShadow = true;
+        grip.position.set(0, -0.08, -0.02);
+        grip.rotation.x = 0.25;
+        grip.castShadow = true;
         gun.add(grip);
 
         const muzzle = new THREE.Mesh(
@@ -411,24 +412,38 @@ class Game {
         group.add(model);
         model.scale.setScalar(1.163);
 
-        let handBone = null;
-        model.traverse((node) => {
-            if (node.isBone) {
-                const name = node.name.toLowerCase();
-                if (name.includes('righthand') || name.includes('right_hand') || name.includes('hand_r')) {
-                    handBone = node;
-                }
-            }
-        });
+        // ===== FIND THE HAND BONE =====
+        // This model uses WristR. Check common variants as fallback.
+        const handBone = model.getObjectByName('WristR')
+            || model.getObjectByName('wristR')
+            || model.getObjectByName('Wrist_R')
+            || (() => {
+                let found = null;
+                model.traverse((node) => {
+                    if (node.isBone && !found) {
+                        const name = node.name.toLowerCase();
+                        if (name === 'wristr' || name === 'righthand' || name === 'right_hand' || name === 'hand_r') {
+                            found = node;
+                        }
+                    }
+                });
+                return found;
+            })();
+
         if (handBone) {
             if (!this.handBoneName) console.log('✅ Hand bone:', handBone.name);
             this.handBoneName = handBone.name;
             const gun = this.createProceduralGun();
+            // Offset so gun sits in the palm and points forward.
+            // These values are a first guess and may need tuning.
+            gun.position.set(0, 0.08, 0.05);
+            gun.rotation.set(-Math.PI / 2, 0, 0);
+            gun.scale.setScalar(0.8);
             handBone.add(gun);
         } else if (!this.handBoneName) {
             const bones = [];
             model.traverse((n) => { if (n.isBone) bones.push(n.name); });
-            console.log('❌ No hand bone. Names:', bones.join(', '));
+            console.log('❌ No hand bone found. Names:', bones.join(', '));
             this.handBoneName = 'NONE';
         }
 
@@ -569,10 +584,15 @@ class Game {
         }
     }
 
+    // ============ BUILDINGS + RAMPS (fixed) ============
     createRealisticBuildings() {
         const loader = new GLTFLoader();
         const offsetX = -((BUILD_COLS - 1) * BUILD_SPACING_X) / 2;
         const offsetZ = -((BUILD_ROWS - 1) * BUILD_SPACING_Z) / 2;
+
+        this.buildingsTarget = BUILD_COLS * BUILD_ROWS;
+        this.buildingsLoaded = 0;
+        this.rampsPlaced = false;
 
         for (let r = 0; r < BUILD_ROWS; r++) {
             for (let c = 0; c < BUILD_COLS; c++) {
@@ -606,10 +626,24 @@ class Game {
                         doorPos: new THREE.Vector3(x, 1.2, z + size.z * 0.55),
                         topY: box3.max.y
                     });
-                }, undefined, () => {});
+
+                    this.buildingsLoaded++;
+                    // Once all buildings are loaded, place the ramps
+                    if (this.buildingsLoaded >= this.buildingsTarget && !this.rampsPlaced) {
+                        this.rampsPlaced = true;
+                        this.createRamps();
+                    }
+                }, undefined, () => {
+                    // Count failures so we don't hang forever
+                    this.buildingsLoaded++;
+                    if (this.buildingsLoaded >= this.buildingsTarget && !this.rampsPlaced) {
+                        this.rampsPlaced = true;
+                        this.createRamps();
+                    }
+                });
             }
         }
-        console.log(`🏢 Loading ${BUILD_COLS * BUILD_ROWS} buildings`);
+        console.log(`🏢 Loading ${BUILD_COLS * BUILD_ROWS} buildings, ramps will place after`);
     }
 
     createRamps() {
@@ -617,12 +651,35 @@ class Game {
         let placed = 0;
         let attempts = 0;
 
-        while (placed < RAMP_COUNT && attempts < 400) {
+        while (placed < RAMP_COUNT && attempts < 800) {
             attempts++;
             if (this.buildings.length === 0) break;
             const b = this.buildings[Math.floor(Math.random() * this.buildings.length)];
-            const bx = b.collider.min.x + (b.collider.max.x - b.collider.min.x) * (Math.random() > 0.5 ? -0.7 : 1.7);
-            const bz = b.collider.min.z + (b.collider.max.z - b.collider.min.z) * (Math.random() > 0.5 ? -0.7 : 1.7);
+            const c = b.collider;
+            const bW = c.max.x - c.min.x;
+            const bD = c.max.z - c.min.z;
+
+            // Place ramp on one of the 4 sides of the building
+            const side = Math.floor(Math.random() * 4);
+            let bx, bz, rampRot = 0;
+            const off = 6; // distance from building center to ramp center
+            if (side === 0) { // north
+                bx = c.min.x + bW * 0.5;
+                bz = c.min.z - off;
+                rampRot = Math.PI / 2;
+            } else if (side === 1) { // south
+                bx = c.min.x + bW * 0.5;
+                bz = c.max.z + off;
+                rampRot = -Math.PI / 2;
+            } else if (side === 2) { // west
+                bx = c.min.x - off;
+                bz = c.min.z + bD * 0.5;
+                rampRot = 0;
+            } else { // east
+                bx = c.max.x + off;
+                bz = c.min.z + bD * 0.5;
+                rampRot = Math.PI;
+            }
 
             const rampLength = 10;
             const rampWidth = 3;
@@ -630,24 +687,43 @@ class Game {
 
             const box = new THREE.BoxGeometry(rampLength, 0.4, rampWidth);
             const ramp = new THREE.Mesh(box, woodMat);
-            const angle = Math.atan2(rampHeight, rampLength);
-            ramp.rotation.z = -angle;
+            const slopeAngle = Math.atan2(rampHeight, rampLength);
+
+            // Store the ramp's local axes so surface Y is computed correctly
+            // regardless of rotation. For simplicity, we treat the ramp as
+            // sloping along its local +X axis (toward the building).
             ramp.position.set(bx, rampHeight / 2, bz);
+            ramp.rotation.y = rampRot;
+            ramp.rotation.z = -slopeAngle;
             ramp.castShadow = true;
             ramp.receiveShadow = true;
             this.scene.add(ramp);
 
-            this.ramps.push({
+            // Compute bounding box for footprint check (axis-aligned)
+            const rbb = new THREE.Box3().setFromObject(ramp);
+
+            // Slope direction is the local +X axis rotated by rampRot
+            const dirX = Math.cos(rampRot);
+            const dirZ = -Math.sin(rampRot);
+
+            const rampData = {
                 mesh: ramp,
                 collider: new THREE.Box3(
-                    new THREE.Vector3(bx - rampLength / 2, 0, bz - rampWidth / 2),
-                    new THREE.Vector3(bx + rampLength / 2, rampHeight, bz + rampWidth / 2)
+                    new THREE.Vector3(rbb.min.x, 0, rbb.min.z),
+                    new THREE.Vector3(rbb.max.x, rampHeight, rbb.max.z)
                 ),
-                computeSurfaceY: (px) => {
-                    const t = (px - (bx - rampLength / 2)) / rampLength;
+                computeSurfaceY: (px, pz) => {
+                    // Project point onto the slope direction
+                    const dx = px - bx;
+                    const dz = pz - bz;
+                    // Local offset along slope direction
+                    const along = dx * dirX + dz * dirZ;
+                    // Ramp runs from -rampLength/2 (low) to +rampLength/2 (high, near building)
+                    const t = (along + rampLength / 2) / rampLength;
                     return Math.max(0, Math.min(rampHeight, t * rampHeight));
                 }
-            });
+            };
+            this.ramps.push(rampData);
             placed++;
         }
         console.log(`🪜 Placed ${placed} ramps`);
@@ -1353,7 +1429,6 @@ class Game {
         this.otherPlayers.clear();
     }
 
-    // ============ MULTIPLAYER ============
     setupAuthListener() {
         onAuthStateChanged(auth, (user) => {
             this.currentUser = user;
@@ -1487,7 +1562,6 @@ class Game {
         this.lastUpdateTime = now;
 
         if (this.gameActive) {
-            // Zoom auto-reset
             if (this.zoomed && now - this.lastShootTime > ZOOM_AUTO_RESET_MS && this.lastShootTime > 0) {
                 this.zoomed = false;
                 const btn = document.getElementById('zoomBtn');
@@ -1500,7 +1574,6 @@ class Game {
             this.camera.fov = this.currentFov;
             this.camera.updateProjectionMatrix();
 
-            // Movement
             const forwardDir = new THREE.Vector3(-Math.sin(this.playerYaw), 0, -Math.cos(this.playerYaw));
             const rightDir = new THREE.Vector3(Math.cos(this.playerYaw), 0, -Math.sin(this.playerYaw));
 
@@ -1535,7 +1608,6 @@ class Game {
             this.playerPos.x = Math.max(-MAP_HALF + 2, Math.min(MAP_HALF - 2, this.playerPos.x));
             this.playerPos.z = Math.max(-MAP_HALF + 2, Math.min(MAP_HALF - 2, this.playerPos.z));
 
-            // Vertical
             const groundY = this.getGroundY(this.playerPos.x, this.playerPos.z, this.playerY);
 
             if (this.playerY > groundY + 0.05) {

@@ -158,7 +158,16 @@ html, body {
     font-weight: bold;
     text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.9);
 }
+#zoomBtn {
+    background: rgba(60, 140, 200, 0.85);
+    border-color: rgba(100, 180, 255, 0.9);
+}
 
+#zoomBtn.active {
+    background: rgba(255, 200, 0, 0.9);
+    border-color: #ffdd44;
+    box-shadow: 0 0 20px rgba(255, 200, 0, 0.7);
+}
 #minimap {
     position: fixed;
     top: 15px;
