@@ -8,8 +8,13 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import {
     getFirestore, collection, doc, setDoc, updateDoc, deleteDoc,
-    onSnapshot, query, orderBy, limit, serverTimestamp, addDoc, increment
+    onSnapshot, query, serverTimestamp, addDoc, increment
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+import { AssetLoader } from './assetLoader.js';
+import { CityGenerator } from './cityGenerator.js';
+import { setupSky, setupLighting, updateSun } from './lighting.js';
+import * as MANIFEST from './assetManifest.js';
 
 const firebaseConfig = {
     apiKey: "AIzaSyC9jF-ocy6HjsVzWVVlAyXW-4aIFgA79-A",
@@ -30,10 +35,6 @@ try {
 const MAP_HALF = 200;
 const FOG_NEAR = 200;
 const FOG_FAR = 500;
-const BUILD_COLS = 10;
-const BUILD_ROWS = 8;
-const BUILD_SPACING_X = 38;
-const BUILD_SPACING_Z = 42;
 const PLAYER_RADIUS = 0.4;
 
 const NORMAL_FOV = 70;
@@ -104,23 +105,9 @@ const MELEE = {
     Sword_Slash: { damage: 75, range: 2.6, cooldown: 600,  aimDot: 0.3 }
 };
 
-const KENNEY_BUILDINGS = [
-    'building-a.glb','building-b.glb','building-c.glb','building-d.glb',
-    'building-e.glb','building-f.glb','building-g.glb','building-h.glb',
-    'building-i.glb','building-j.glb','building-k.glb','building-l.glb',
-    'building-m.glb','building-n.glb','building-o.glb','building-p.glb',
-    'building-q.glb','building-r.glb','building-s.glb','building-t.glb',
-    'chimney-basic.glb','chimney-large.glb','chimney-medium.glb','chimney-small.glb',
-    'detail-tank.glb','detail-tank-large.glb',
-    'shipping-container-a.glb','shipping-container-b.glb','shipping-container-c.glb',
-    'solar-panel-flat.glb','solar-panel-landscape.glb','solar-panel-landscape-group.glb',
-    'solar-panel-portrait.glb','solar-panel-portrait-group.glb',
-    'water-tower.glb','windmill.glb','windmill-low.glb'
-];
-
 class Game {
     constructor() {
-        console.log('🎮 CODM-STYLE CITY WARZONE');
+        console.log('🎮 CODM-STYLE CITY WARZONE — Downtown City Edition');
 
         this.currentUser = null;
         this.playerId = null;
@@ -163,14 +150,16 @@ class Game {
 
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(0x87CEEB);
-        this.scene.fog = new THREE.Fog(0x87CEEB, FOG_NEAR, FOG_FAR);
 
-        this.camera = new THREE.PerspectiveCamera(NORMAL_FOV, window.innerWidth / window.innerHeight, 0.1, 1200);
+        this.camera = new THREE.PerspectiveCamera(NORMAL_FOV, window.innerWidth / window.innerHeight, 0.1, 1500);
 
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+        this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        this.renderer.toneMappingExposure = 1.05;
 
         const cont = document.getElementById('gameContainer');
         if (cont) cont.appendChild(this.renderer.domElement);
@@ -214,41 +203,23 @@ class Game {
         this.lastSwipeX = 0;
         this.lastSwipeY = 0;
 
-        this.buildings = [];
-        this.containers = [];
-        this.oilBunkers = [];
         this.ammoBoxes = [];
-        this.trees = [];
-
         this.nearbyDoor = null;
-        this.insideBuilding = false;
-        this.currentBuilding = null;
 
-        this.buildingsLoaded = 0;
-        this.buildingsTarget = BUILD_COLS * BUILD_ROWS;
+        // New city system
+        this.loader = new AssetLoader();
+        this.city = null;
+        this.sun = null;
+        this._bootComplete = false;
 
-        this.setupLighting();
-        this.setupGround();
-        this.createRealisticBuildings();
-        this.createContainers(60);
-        this.createOilBunkers(20);
-        this.createSimpleEnvironment();
-        this.spawnInitialAmmoBoxes(40);
         this.setupControls();
         this.setupMinimap();
         this.buildAnimMenu();
         this.injectSVGIcons();
 
-        setInterval(() => this.checkNearbyDoors(), 200);
         setInterval(() => this.updateCooldownUI(), 50);
 
-        Promise.all([
-            this.loadGLB().catch(e => console.error('Soldier load failed:', e)),
-            this.loadGun().catch(e => console.warn('Gun load failed:', e.message))
-        ]).then(() => {
-            this.createLocalPlayer();
-            this.setupAuthListener();
-        });
+        this.boot();
 
         this.animate();
 
@@ -261,6 +232,77 @@ class Game {
         window.addEventListener('beforeunload', () => this.cleanup());
     }
 
+    // ================= BOOT / LOADING =================
+    async boot() {
+        const loadingEl = this.showLoadingScreen();
+        try {
+            this.loader.onProgress = (done, total, name) => {
+                this.updateLoadingScreen(loadingEl, done, total, name);
+            };
+
+            await this.loader.loadAll(MANIFEST.PRELOAD, 6);
+
+            setupSky(this.scene);
+            const { sun } = setupLighting(this.scene);
+            this.sun = sun;
+
+            this.city = new CityGenerator(this.scene, this.loader);
+            this.city.build();
+
+            await Promise.all([
+                this.loadGLB().catch(e => console.error('Soldier load failed:', e)),
+                this.loadGun().catch(e => console.warn('Gun load failed:', e.message))
+            ]);
+            this.createLocalPlayer();
+            this.setupAuthListener();
+
+            this._bootComplete = true;
+            this.hideLoadingScreen(loadingEl);
+        } catch (err) {
+            console.error('[boot] failed:', err);
+            this.hideLoadingScreen(loadingEl);
+        }
+    }
+
+    showLoadingScreen() {
+        let el = document.getElementById('koLoading');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'koLoading';
+            el.style.cssText = `
+                position:fixed; inset:0; background:#0a0e1a; z-index:99999;
+                display:flex; flex-direction:column; align-items:center; justify-content:center;
+                color:#4aff9e; font-family:Arial,sans-serif; gap:20px;
+            `;
+            el.innerHTML = `
+                <div style="font-size:28px; letter-spacing:4px; font-weight:bold;">LOADING CITY</div>
+                <div style="width:min(80vw,420px); height:6px; background:rgba(255,255,255,0.1); border-radius:3px; overflow:hidden;">
+                    <div id="koLoadingBar" style="height:100%; width:0%; background:#4aff9e; transition:width 0.15s;"></div>
+                </div>
+                <div id="koLoadingText" style="font-size:12px; color:rgba(255,255,255,0.6); letter-spacing:1px;">Starting…</div>
+            `;
+            document.body.appendChild(el);
+        }
+        return el;
+    }
+
+    updateLoadingScreen(el, done, total, name) {
+        if (!el) return;
+        const bar = el.querySelector('#koLoadingBar');
+        const txt = el.querySelector('#koLoadingText');
+        const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+        if (bar) bar.style.width = pct + '%';
+        if (txt) txt.textContent = `${done} / ${total}  ·  ${name || ''}`;
+    }
+
+    hideLoadingScreen(el) {
+        if (!el) return;
+        el.style.transition = 'opacity 0.4s';
+        el.style.opacity = '0';
+        setTimeout(() => el.remove(), 500);
+    }
+
+    // ================= SVG ICONS =================
     injectSVGIcons() {
         const map = {
             punchBtn: 'punch', kickBtn: 'kick', rollBtn: 'roll', waveBtn: 'wave',
@@ -281,6 +323,7 @@ class Game {
         }
     }
 
+    // ================= AUTH / LOGIN =================
     showLoginScreen() {
         const overlay = document.getElementById('loginOverlay');
         if (overlay) overlay.style.display = 'flex';
@@ -344,6 +387,7 @@ class Game {
         return 'Login failed: ' + (error.message || code);
     }
 
+    // ================= ASSETS =================
     loadGLB() {
         return new Promise((resolve, reject) => {
             const loader = new GLTFLoader();
@@ -443,7 +487,6 @@ class Game {
             let gun;
             if (this.gunLoaded && this.gunTemplate) {
                 gun = SkeletonUtils.clone(this.gunTemplate);
-                // Reset to original offset — gun sits near hand
                 gun.position.set(0, 0.05, 0.05);
                 gun.rotation.set(0, 0, 0);
             } else {
@@ -525,423 +568,23 @@ class Game {
             if (this.zoomMode === ZOOM_MODE.RIFLE) zoomBtn.classList.add('active');
             if (this.zoomMode === ZOOM_MODE.SNIPER) zoomBtn.classList.add('sniper');
         }
-        if (scope) {
-            scope.classList.toggle('visible', this.zoomMode === ZOOM_MODE.SNIPER);
-        }
-        if (crosshair) {
-            crosshair.style.opacity = this.zoomMode === ZOOM_MODE.SNIPER ? '0' : '1';
-        }
-        if (player) {
-            player.visible = this.zoomMode !== ZOOM_MODE.SNIPER;
-        }
+        if (scope) scope.classList.toggle('visible', this.zoomMode === ZOOM_MODE.SNIPER);
+        if (crosshair) crosshair.style.opacity = this.zoomMode === ZOOM_MODE.SNIPER ? '0' : '1';
+        if (player) player.visible = this.zoomMode !== ZOOM_MODE.SNIPER;
     }
 
+    // ================= COLLISION =================
     isFree(x, z, feetY, headY) {
-        for (const b of this.buildings) {
-            const c = b.collider;
-            if (x + PLAYER_RADIUS < c.min.x || x - PLAYER_RADIUS > c.max.x) continue;
-            if (z + PLAYER_RADIUS < c.min.z || z - PLAYER_RADIUS > c.max.z) continue;
-            if (headY < c.min.y) continue;
-            if (feetY > c.max.y - 0.05) continue;
-            return false;
-        }
+        // New city collisions
+        if (this.city && !this.city.isFree(x, z, PLAYER_RADIUS)) return false;
         return true;
     }
 
     getGroundY(x, z, currentY) {
-        let best = 0;
-        for (const b of this.buildings) {
-            const c = b.collider;
-            if (x + PLAYER_RADIUS < c.min.x || x - PLAYER_RADIUS > c.max.x) continue;
-            if (z + PLAYER_RADIUS < c.min.z || z - PLAYER_RADIUS > c.max.z) continue;
-            if (c.max.y > best && c.max.y <= currentY + 0.5) best = c.max.y;
-        }
-        return best;
+        return 0;
     }
 
-    setupLighting() {
-        this.scene.add(new THREE.AmbientLight(0x606080, 0.9));
-        const sun = new THREE.DirectionalLight(0xffeedd, 1.4);
-        sun.position.set(80, 120, 80);
-        sun.castShadow = true;
-        sun.shadow.mapSize.set(2048, 2048);
-        sun.shadow.camera.left = -120;
-        sun.shadow.camera.right = 120;
-        sun.shadow.camera.top = 120;
-        sun.shadow.camera.bottom = -120;
-        sun.shadow.camera.far = 400;
-        this.scene.add(sun);
-        const fill = new THREE.DirectionalLight(0x88aacc, 0.7);
-        fill.position.set(-60, 40, -80);
-        this.scene.add(fill);
-    }
-
-    setupGround() {
-        const g = new THREE.Mesh(
-            new THREE.PlaneGeometry(MAP_HALF * 2, MAP_HALF * 2),
-            new THREE.MeshStandardMaterial({ color: 0x3a7e3a, roughness: 0.85 })
-        );
-        g.rotation.x = -Math.PI / 2;
-        g.receiveShadow = true;
-        this.scene.add(g);
-
-        const roadMat = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.9 });
-        for (let i = 0; i <= BUILD_COLS; i++) {
-            const x = -((BUILD_COLS - 1) * BUILD_SPACING_X) / 2 + i * BUILD_SPACING_X - BUILD_SPACING_X / 2;
-            const road = new THREE.Mesh(new THREE.PlaneGeometry(6, MAP_HALF * 2), roadMat);
-            road.rotation.x = -Math.PI / 2;
-            road.position.set(x, 0.01, 0);
-            road.receiveShadow = true;
-            this.scene.add(road);
-        }
-        for (let i = 0; i <= BUILD_ROWS; i++) {
-            const z = -((BUILD_ROWS - 1) * BUILD_SPACING_Z) / 2 + i * BUILD_SPACING_Z - BUILD_SPACING_Z / 2;
-            const road = new THREE.Mesh(new THREE.PlaneGeometry(MAP_HALF * 2, 6), roadMat);
-            road.rotation.x = -Math.PI / 2;
-            road.position.set(0, 0.01, z);
-            road.receiveShadow = true;
-            this.scene.add(road);
-        }
-
-        for (let i = 0; i < 150; i++) {
-            const p = new THREE.Mesh(
-                new THREE.CircleGeometry(2 + Math.random() * 4, 6),
-                new THREE.MeshStandardMaterial({ color: 0x4a8e4a })
-            );
-            p.rotation.x = -Math.PI / 2;
-            p.position.set((Math.random() - 0.5) * MAP_HALF * 1.9, 0.02, (Math.random() - 0.5) * MAP_HALF * 1.9);
-            p.receiveShadow = true;
-            this.scene.add(p);
-        }
-    }
-
-    createRealisticBuildings() {
-        const loader = new GLTFLoader();
-        const offsetX = -((BUILD_COLS - 1) * BUILD_SPACING_X) / 2;
-        const offsetZ = -((BUILD_ROWS - 1) * BUILD_SPACING_Z) / 2;
-
-        this.buildingsTarget = BUILD_COLS * BUILD_ROWS;
-        this.buildingsLoaded = 0;
-
-        for (let r = 0; r < BUILD_ROWS; r++) {
-            for (let c = 0; c < BUILD_COLS; c++) {
-                const x = offsetX + c * BUILD_SPACING_X + (Math.random() - 0.5) * 8;
-                const z = offsetZ + r * BUILD_SPACING_Z + (Math.random() - 0.5) * 8;
-                const file = KENNEY_BUILDINGS[(r * BUILD_COLS + c) % KENNEY_BUILDINGS.length];
-
-                loader.load(file, (gltf) => {
-                    const b = gltf.scene;
-                    b.position.set(x, 0, z);
-                    b.rotation.y = Math.floor(Math.random() * 4) * (Math.PI / 2);
-                    b.traverse(n => { if (n.isMesh) { n.castShadow = true; n.receiveShadow = true; } });
-
-                    const rawBox = new THREE.Box3().setFromObject(b);
-                    const rawSize = rawBox.getSize(new THREE.Vector3());
-                    const targetHeight = 10 + Math.random() * 10;
-                    if (rawSize.y > 0) {
-                        const scale = targetHeight / rawSize.y;
-                        b.scale.setScalar(scale);
-                        const box2 = new THREE.Box3().setFromObject(b);
-                        b.position.y -= box2.min.y;
-                    }
-
-                    const box3 = new THREE.Box3().setFromObject(b);
-                    const size = box3.getSize(new THREE.Vector3());
-
-                    this.scene.add(b);
-                    this.buildings.push({
-                        mesh: b,
-                        collider: box3.clone(),
-                        doorPos: new THREE.Vector3(x, 1.2, z + size.z * 0.55),
-                        topY: box3.max.y
-                    });
-
-                    this.buildingsLoaded++;
-                }, undefined, () => { this.buildingsLoaded++; });
-            }
-        }
-        console.log(`🏢 Loading ${BUILD_COLS * BUILD_ROWS} buildings`);
-    }
-
-    createContainers(count) {
-        const colors = [0x3366cc, 0xcc3333, 0x33cc33, 0xcccc33, 0xcc33cc, 0x888888];
-        for (let i = 0; i < count; i++) {
-            const g = new THREE.Group();
-            const w = 2.5 + Math.random() * 1.5;
-            const h = 2.5 + Math.random() * 1;
-            const d = 6 + Math.random() * 2;
-            const body = new THREE.Mesh(
-                new THREE.BoxGeometry(w, h, d),
-                new THREE.MeshStandardMaterial({ color: colors[Math.floor(Math.random() * colors.length)], roughness: 0.6 })
-            );
-            body.position.y = h / 2;
-            body.castShadow = body.receiveShadow = true;
-            g.add(body);
-            g.rotation.y = Math.random() * Math.PI * 2;
-
-            let placed = false, att = 0;
-            while (!placed && att < 40) {
-                const x = (Math.random() - 0.5) * (MAP_HALF * 1.8);
-                const z = (Math.random() - 0.5) * (MAP_HALF * 1.8);
-                let close = false;
-                for (const b of this.buildings) {
-                    const bp = b.mesh.position;
-                    if (Math.hypot(x - bp.x, z - bp.z) < 8) { close = true; break; }
-                }
-                if (!close) { g.position.set(x, 0, z); placed = true; }
-                att++;
-            }
-            if (placed) { this.scene.add(g); this.containers.push(g); }
-        }
-    }
-
-    createOilBunkers(count) {
-        for (let i = 0; i < count; i++) {
-            const g = new THREE.Group();
-            const tank = new THREE.Mesh(
-                new THREE.CylinderGeometry(4, 4, 6, 16),
-                new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.6, roughness: 0.4 })
-            );
-            tank.position.y = 3;
-            tank.castShadow = tank.receiveShadow = true;
-            g.add(tank);
-            const dome = new THREE.Mesh(
-                new THREE.SphereGeometry(3.8, 16, 8),
-                new THREE.MeshStandardMaterial({ color: 0xaaaaaa, metalness: 0.7, roughness: 0.3 })
-            );
-            dome.position.y = 6;
-            dome.scale.set(1, 0.35, 1);
-            dome.castShadow = true;
-            g.add(dome);
-
-            let placed = false, att = 0;
-            while (!placed && att < 30) {
-                const x = (Math.random() - 0.5) * (MAP_HALF * 1.7);
-                const z = (Math.random() - 0.5) * (MAP_HALF * 1.7);
-                let close = false;
-                for (const b of this.buildings) {
-                    const bp = b.mesh.position;
-                    if (Math.hypot(x - bp.x, z - bp.z) < 12) { close = true; break; }
-                }
-                if (!close) { g.position.set(x, 0, z); placed = true; }
-                att++;
-            }
-            if (placed) { this.scene.add(g); this.oilBunkers.push(g); }
-        }
-    }
-
-    createSimpleEnvironment() {
-        for (let i = 0; i < 60; i++) {
-            const g = new THREE.Group();
-            const trunk = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.5, 0.7, 3),
-                new THREE.MeshStandardMaterial({ color: 0x8B5A2B })
-            );
-            trunk.position.y = 1.5;
-            trunk.castShadow = true;
-            g.add(trunk);
-            const lm = new THREE.MeshStandardMaterial({ color: 0x2a8a2a });
-            for (let l = 0; l < 3; l++) {
-                const leaf = new THREE.Mesh(new THREE.ConeGeometry(1.5 - l * 0.3, 1.8 - l * 0.3, 6), lm);
-                leaf.position.y = 3.2 + l * 1.0;
-                leaf.castShadow = true;
-                g.add(leaf);
-            }
-
-            let placed = false, att = 0;
-            while (!placed && att < 30) {
-                const x = (Math.random() - 0.5) * (MAP_HALF * 1.85);
-                const z = (Math.random() - 0.5) * (MAP_HALF * 1.85);
-                let close = false;
-                for (const b of this.buildings) {
-                    const bp = b.mesh.position;
-                    if (Math.hypot(x - bp.x, z - bp.z) < 7) { close = true; break; }
-                }
-                if (!close) { g.position.set(x, 0, z); placed = true; }
-                att++;
-            }
-            if (placed) { this.scene.add(g); this.trees.push(g); }
-        }
-    }
-
-    spawnInitialAmmoBoxes(count) {
-        for (let i = 0; i < count; i++) {
-            this.spawnAmmoBox(
-                (Math.random() - 0.5) * (MAP_HALF * 1.6),
-                0.5,
-                (Math.random() - 0.5) * (MAP_HALF * 1.6),
-                5 + Math.floor(Math.random() * 10)
-            );
-        }
-    }
-
-    spawnAmmoBox(x, y, z, ammo = 10) {
-        const b = new THREE.Mesh(
-            new THREE.BoxGeometry(0.8, 0.8, 0.8),
-            new THREE.MeshStandardMaterial({ color: 0xffaa00, emissive: 0x442200, transparent: true, opacity: 0.9 })
-        );
-        b.position.set(x, y, z);
-        b.castShadow = true;
-        b.userData = { ammo };
-        this.scene.add(b);
-        this.ammoBoxes.push(b);
-        return b;
-    }
-
-    spawnAmmoBoxOnDeath(pos, ammo = 20) {
-        this.spawnAmmoBox(pos.x, 0.5, pos.z, ammo);
-    }
-
-    checkNearbyDoors() {
-        if (!this.gameActive) return;
-        let found = null, minD = 4;
-        this.buildings.forEach(b => {
-            if (!b.doorPos) return;
-            const d = this.playerPos.distanceTo(b.doorPos);
-            if (d < minD) { minD = d; found = b; }
-        });
-        if (found !== this.nearbyDoor) {
-            this.nearbyDoor = found;
-            const el = document.getElementById('doorIndicator');
-            if (el) el.style.display = found ? 'block' : 'none';
-        }
-    }
-
-    isOnCooldown(actionName) {
-        return (this.cooldowns[actionName] || 0) > Date.now();
-    }
-
-    triggerAction(actionName) {
-        if (!this.gameActive) return;
-        if (this.isOnCooldown(actionName)) { this.showNotification('Cooldown', 'info'); return; }
-        if (!this.localPlayer) return;
-
-        if (MELEE[actionName]) {
-            const cfg = MELEE[actionName];
-            this.cooldowns[actionName] = Date.now() + cfg.cooldown;
-            this.playOverride(actionName, 500);
-            this.doMeleeAttack(cfg.damage, cfg.range, cfg.aimDot);
-            return;
-        }
-        if (actionName === 'Roll') {
-            this.cooldowns.Roll = Date.now() + 3000;
-            this.playOverride('Roll', 700);
-            this.rolling = true;
-            this.rollUntil = Date.now() + 700;
-            const fwd = new THREE.Vector3(-Math.sin(this.playerYaw), 0, -Math.cos(this.playerYaw));
-            const right = new THREE.Vector3(Math.cos(this.playerYaw), 0, -Math.sin(this.playerYaw));
-            const dir = new THREE.Vector3();
-            if (Math.abs(this.moveY) > 0.05) dir.addScaledVector(fwd, this.moveY);
-            if (Math.abs(this.moveX) > 0.05) dir.addScaledVector(right, this.moveX);
-            if (dir.length() < 0.1) dir.copy(fwd);
-            dir.normalize();
-            this.rollDirection.copy(dir);
-            return;
-        }
-        if (actionName === 'Wave') {
-            this.cooldowns.Wave = Date.now() + 2000;
-            this.playOverride('Wave', 1500);
-            return;
-        }
-        if (actionName === 'Interact') {
-            this.cooldowns.Interact = Date.now() + 500;
-            this.playOverride('Interact', 600);
-            let nearest = null, nearestDist = 3;
-            this.ammoBoxes.forEach(b => {
-                const d = this.playerPos.distanceTo(b.position);
-                if (d < nearestDist) { nearestDist = d; nearest = b; }
-            });
-            if (nearest) {
-                const gained = nearest.userData.ammo || 10;
-                this.ammo = Math.min(this.maxAmmo, this.ammo + gained);
-                this.boxesCollected++;
-                this.scene.remove(nearest);
-                this.ammoBoxes.splice(this.ammoBoxes.indexOf(nearest), 1);
-                this.updateUI();
-                this.showNotification(`+${gained} Ammo`, 'success');
-                if (this.firebaseReady && this.playerRef) updateDoc(this.playerRef, { ammo: this.ammo }).catch(() => {});
-                return;
-            }
-            this.showNotification('Nothing to interact with', 'info');
-            return;
-        }
-    }
-
-    playOverride(name, durationMs) {
-        this.overrideAnim = name;
-        this.overrideUntil = Date.now() + durationMs;
-    }
-
-    doMeleeAttack(damage, range, aimDot) {
-        const fwd = new THREE.Vector3(-Math.sin(this.playerYaw), 0, -Math.cos(this.playerYaw));
-        let hitAny = false;
-        this.otherPlayers.forEach((p, pid) => {
-            if (p.isDead) return;
-            const to = p.group.position.clone().sub(this.playerPos);
-            to.y = 0;
-            const dist = to.length();
-            if (dist > range) return;
-            to.normalize();
-            if (to.dot(fwd) < aimDot) return;
-            this.registerHit(pid, damage);
-            hitAny = true;
-        });
-        if (hitAny) this.spawnHitEffect();
-    }
-
-    spawnHitEffect() {
-        const v = document.getElementById('damageVignette');
-        if (v) {
-            v.style.boxShadow = 'inset 0 0 120px rgba(255,200,50,0.5)';
-            setTimeout(() => { v.style.boxShadow = ''; }, 150);
-        }
-    }
-
-    updateCooldownUI() {
-        const map = { punchBtn: 'Punch_Left', kickBtn: 'Kick_Left', rollBtn: 'Roll', waveBtn: 'Wave' };
-        Object.entries(map).forEach(([id, action]) => {
-            const btn = document.getElementById(id);
-            if (!btn) return;
-            let overlay = btn.querySelector('.cooldown');
-            if (!overlay) {
-                overlay = document.createElement('div');
-                overlay.className = 'cooldown';
-                btn.appendChild(overlay);
-            }
-            const cfg = MELEE[action];
-            const totalCd = cfg ? cfg.cooldown : (action === 'Roll' ? 3000 : 2000);
-            const remaining = (this.cooldowns[action] || 0) - Date.now();
-            overlay.style.height = remaining > 0 ? Math.min(100, (remaining / totalCd) * 100) + '%' : '0%';
-        });
-    }
-
-    addKillToFeed() {
-        // Kill feed removed — no-op
-    }
-
-    showNotification(msg, type = 'info') {
-        const el = document.createElement('div');
-        el.style.cssText = `position:fixed;top:80px;left:50%;transform:translateX(-50%);background:${type === 'error' ? '#ff4444' : type === 'success' ? '#44ff44' : '#4444ff'};color:white;padding:10px 22px;border-radius:30px;font-family:Arial;font-size:14px;font-weight:bold;z-index:10000;box-shadow:0 4px 20px rgba(0,0,0,0.5);text-shadow:1px 1px 2px black;`;
-        el.textContent = msg;
-        document.body.appendChild(el);
-        setTimeout(() => el.remove(), 2500);
-    }
-
-    buildAnimMenu() {
-        const grid = document.getElementById('animMenuGrid');
-        if (!grid) return;
-        grid.innerHTML = '';
-        REAL_ACTIONS.forEach(a => {
-            const item = document.createElement('div');
-            item.className = 'anim-item';
-            item.innerHTML = `<div class="anim-icon">${SVG_ICONS[a.icon] || ''}</div><div class="anim-name">${a.label}</div><div class="anim-desc">${a.desc}</div>`;
-            item.addEventListener('click', () => { this.triggerAction(a.name); this.closeAnimMenu(); });
-            grid.appendChild(item);
-        });
-    }
-    openAnimMenu() { const m = document.getElementById('animMenu'); if (m) m.classList.add('open'); }
-    closeAnimMenu() { const m = document.getElementById('animMenu'); if (m) m.classList.remove('open'); }
-
+    // ================= CONTROLS =================
     setupControls() {
         const swipeZone = document.getElementById('viewSwipeZone');
         const joy = document.getElementById('joystickContainer');
@@ -1069,6 +712,7 @@ class Game {
         if (e) e.textContent = sp.toFixed(1);
     }
 
+    // ================= MINIMAP =================
     setupMinimap() {
         const c = document.getElementById('minimapCanvas');
         if (c) this.minimapCtx = c.getContext('2d');
@@ -1085,21 +729,14 @@ class Game {
         ctx.fillStyle = '#1a1a2e';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        ctx.fillStyle = '#8B4513';
-        this.buildings.forEach(b => {
-            const p = toMap(b.mesh.position.x, b.mesh.position.z);
-            ctx.fillRect(p.x - 3, p.y - 3, 6, 6);
-        });
-        ctx.fillStyle = '#3366cc';
-        this.containers.forEach(c => {
-            const p = toMap(c.position.x, c.position.z);
-            ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
-        });
-        ctx.fillStyle = '#ffaa00';
-        this.oilBunkers.forEach(b => {
-            const p = toMap(b.position.x, b.position.z);
-            ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill();
-        });
+        if (this.city) {
+            ctx.fillStyle = '#8B4513';
+            this.city.buildings.forEach(b => {
+                const p = toMap(b.mesh.position.x, b.mesh.position.z);
+                ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+            });
+        }
+
         this.otherPlayers.forEach(p => {
             const m = toMap(p.group.position.x, p.group.position.z);
             if (m.x > 0 && m.x < canvas.width && m.y > 0 && m.y < canvas.height) {
@@ -1112,6 +749,7 @@ class Game {
         ctx.beginPath(); ctx.arc(me.x, me.y, 5, 0, Math.PI * 2); ctx.fill();
     }
 
+    // ================= GAME FLOW =================
     startGame() {
         this.gameActive = true;
         this.health = 100;
@@ -1319,7 +957,172 @@ class Game {
         this.otherPlayers.clear();
     }
 
+    // ================= ACTION MENU =================
+    buildAnimMenu() {
+        const grid = document.getElementById('animMenuGrid');
+        if (!grid) return;
+        grid.innerHTML = '';
+        REAL_ACTIONS.forEach(a => {
+            const item = document.createElement('div');
+            item.className = 'anim-item';
+            item.innerHTML = `<div class="anim-icon">${SVG_ICONS[a.icon] || ''}</div><div class="anim-name">${a.label}</div><div class="anim-desc">${a.desc}</div>`;
+            item.addEventListener('click', () => { this.triggerAction(a.name); this.closeAnimMenu(); });
+            grid.appendChild(item);
+        });
+    }
+    openAnimMenu() { const m = document.getElementById('animMenu'); if (m) m.classList.add('open'); }
+    closeAnimMenu() { const m = document.getElementById('animMenu'); if (m) m.classList.remove('open'); }
+
+    isOnCooldown(actionName) {
+        return (this.cooldowns[actionName] || 0) > Date.now();
+    }
+
+    triggerAction(actionName) {
+        if (!this.gameActive) return;
+        if (this.isOnCooldown(actionName)) { this.showNotification('Cooldown', 'info'); return; }
+        if (!this.localPlayer) return;
+
+        if (MELEE[actionName]) {
+            const cfg = MELEE[actionName];
+            this.cooldowns[actionName] = Date.now() + cfg.cooldown;
+            this.playOverride(actionName, 500);
+            this.doMeleeAttack(cfg.damage, cfg.range, cfg.aimDot);
+            return;
+        }
+        if (actionName === 'Roll') {
+            this.cooldowns.Roll = Date.now() + 3000;
+            this.playOverride('Roll', 700);
+            this.rolling = true;
+            this.rollUntil = Date.now() + 700;
+            const fwd = new THREE.Vector3(-Math.sin(this.playerYaw), 0, -Math.cos(this.playerYaw));
+            const right = new THREE.Vector3(Math.cos(this.playerYaw), 0, -Math.sin(this.playerYaw));
+            const dir = new THREE.Vector3();
+            if (Math.abs(this.moveY) > 0.05) dir.addScaledVector(fwd, this.moveY);
+            if (Math.abs(this.moveX) > 0.05) dir.addScaledVector(right, this.moveX);
+            if (dir.length() < 0.1) dir.copy(fwd);
+            dir.normalize();
+            this.rollDirection.copy(dir);
+            return;
+        }
+        if (actionName === 'Wave') {
+            this.cooldowns.Wave = Date.now() + 2000;
+            this.playOverride('Wave', 1500);
+            return;
+        }
+        if (actionName === 'Interact') {
+            this.cooldowns.Interact = Date.now() + 500;
+            this.playOverride('Interact', 600);
+            let nearest = null, nearestDist = 3;
+            this.ammoBoxes.forEach(b => {
+                const d = this.playerPos.distanceTo(b.position);
+                if (d < nearestDist) { nearestDist = d; nearest = b; }
+            });
+            if (nearest) {
+                const gained = nearest.userData.ammo || 10;
+                this.ammo = Math.min(this.maxAmmo, this.ammo + gained);
+                this.boxesCollected++;
+                this.scene.remove(nearest);
+                this.ammoBoxes.splice(this.ammoBoxes.indexOf(nearest), 1);
+                this.updateUI();
+                this.showNotification(`+${gained} Ammo`, 'success');
+                if (this.firebaseReady && this.playerRef) updateDoc(this.playerRef, { ammo: this.ammo }).catch(() => {});
+                return;
+            }
+            this.showNotification('Nothing to interact with', 'info');
+            return;
+        }
+    }
+
+    playOverride(name, durationMs) {
+        this.overrideAnim = name;
+        this.overrideUntil = Date.now() + durationMs;
+    }
+
+    doMeleeAttack(damage, range, aimDot) {
+        const fwd = new THREE.Vector3(-Math.sin(this.playerYaw), 0, -Math.cos(this.playerYaw));
+        let hitAny = false;
+        this.otherPlayers.forEach((p, pid) => {
+            if (p.isDead) return;
+            const to = p.group.position.clone().sub(this.playerPos);
+            to.y = 0;
+            const dist = to.length();
+            if (dist > range) return;
+            to.normalize();
+            if (to.dot(fwd) < aimDot) return;
+            this.registerHit(pid, damage);
+            hitAny = true;
+        });
+        if (hitAny) this.spawnHitEffect();
+    }
+
+    spawnHitEffect() {
+        const v = document.getElementById('damageVignette');
+        if (v) {
+            v.style.boxShadow = 'inset 0 0 120px rgba(255,200,50,0.5)';
+            setTimeout(() => { v.style.boxShadow = ''; }, 150);
+        }
+    }
+
+    updateCooldownUI() {
+        const map = { punchBtn: 'Punch_Left', kickBtn: 'Kick_Left', rollBtn: 'Roll', waveBtn: 'Wave' };
+        Object.entries(map).forEach(([id, action]) => {
+            const btn = document.getElementById(id);
+            if (!btn) return;
+            let overlay = btn.querySelector('.cooldown');
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.className = 'cooldown';
+                btn.appendChild(overlay);
+            }
+            const cfg = MELEE[action];
+            const totalCd = cfg ? cfg.cooldown : (action === 'Roll' ? 3000 : 2000);
+            const remaining = (this.cooldowns[action] || 0) - Date.now();
+            overlay.style.height = remaining > 0 ? Math.min(100, (remaining / totalCd) * 100) + '%' : '0%';
+        });
+    }
+
+    showNotification(msg, type = 'info') {
+        const el = document.createElement('div');
+        el.style.cssText = `position:fixed;top:80px;left:50%;transform:translateX(-50%);background:${type === 'error' ? '#ff4444' : type === 'success' ? '#44ff44' : '#4444ff'};color:white;padding:10px 22px;border-radius:30px;font-family:Arial;font-size:14px;font-weight:bold;z-index:10000;box-shadow:0 4px 20px rgba(0,0,0,0.5);text-shadow:1px 1px 2px black;`;
+        el.textContent = msg;
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 2500);
+    }
+
+    // ================= AMMO BOXES =================
+    spawnInitialAmmoBoxes(count) {
+        for (let i = 0; i < count; i++) {
+            const x = (Math.random() - 0.5) * (MAP_HALF * 1.6);
+            const z = (Math.random() - 0.5) * (MAP_HALF * 1.6);
+            // Skip if inside a building
+            if (this.city && !this.city.isFree(x, z, 1.5)) continue;
+            this.spawnAmmoBox(x, 0.5, z, 5 + Math.floor(Math.random() * 10));
+        }
+    }
+
+    spawnAmmoBox(x, y, z, ammo = 10) {
+        const b = new THREE.Mesh(
+            new THREE.BoxGeometry(0.8, 0.8, 0.8),
+            new THREE.MeshStandardMaterial({ color: 0xffaa00, emissive: 0x442200, transparent: true, opacity: 0.9 })
+        );
+        b.position.set(x, y, z);
+        b.castShadow = true;
+        b.userData = { ammo };
+        this.scene.add(b);
+        this.ammoBoxes.push(b);
+        return b;
+    }
+
+    spawnAmmoBoxOnDeath(pos, ammo = 20) {
+        this.spawnAmmoBox(pos.x, 0.5, pos.z, ammo);
+    }
+
+    // ================= AUTH LISTENER =================
     setupAuthListener() {
+        if (!auth) {
+            this.showNotification('Firebase not configured', 'error');
+            return;
+        }
         onAuthStateChanged(auth, (user) => {
             this.currentUser = user;
             if (user) {
@@ -1332,6 +1135,7 @@ class Game {
                 this.hideLoginScreen();
                 this.setupFirebase();
                 this.showNotification(`Welcome ${this.playerName}!`, 'success');
+                this.spawnInitialAmmoBoxes(40);
             } else {
                 this.firebaseReady = false;
                 this.showLoginScreen();
@@ -1366,10 +1170,6 @@ class Game {
                 });
             }, e => {});
 
-            if (this.killsCollection) {
-                // Kill feed listener removed
-            }
-
             this.heartbeatInterval = setInterval(() => {
                 if (this.gameActive && this.playerRef && this.firebaseReady) {
                     const sp = Math.hypot(this.moveX, this.moveY);
@@ -1382,7 +1182,7 @@ class Game {
                         lastUpdate: serverTimestamp()
                     }).catch(() => {});
                 }
-            }, 50);
+            }, 100);
 
             onSnapshot(collection(db, 'game_hits'), (snap) => {
                 snap.docChanges().forEach(change => {
@@ -1433,13 +1233,16 @@ class Game {
         this.otherPlayers.delete(pid);
     }
 
+    // ================= MAIN LOOP =================
     animate() {
         requestAnimationFrame(() => this.animate());
         const now = Date.now();
         const dt = Math.min(0.1, (now - this.lastUpdateTime) / 1000);
         this.lastUpdateTime = now;
 
-        if (this.gameActive) {
+        if (this.gameActive && this._bootComplete) {
+            if (this.sun) updateSun(this.sun, this.playerPos);
+
             if (this.zoomMode !== ZOOM_MODE.OFF
                 && this._resetZoomArmed
                 && now - this.lastShootTime > ZOOM_AUTO_RESET_MS) {
