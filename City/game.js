@@ -4,17 +4,53 @@ import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import {
     getAuth, onAuthStateChanged,
-    signInWithEmailAndPassword, createUserWithEmailAndPassword
+    signInWithEmailAndPassword
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import {
     getFirestore, collection, doc, setDoc, updateDoc, deleteDoc,
-    onSnapshot, query, serverTimestamp, addDoc, increment
+    onSnapshot, serverTimestamp, addDoc, increment
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 import { AssetLoader } from './assetLoader.js';
 import { CityGenerator } from './cityGenerator.js';
 import { setupSky, setupLighting, updateSun } from './lighting.js';
 import * as MANIFEST from './assetManifest.js';
+
+// ================= ON-SCREEN DEBUG =================
+const DEBUG = true;
+function debugLog(msg, color = '#4aff9e') {
+    console.log(msg);
+    if (!DEBUG) return;
+    let panel = document.getElementById('debugPanel');
+    if (!panel) {
+        panel = document.createElement('div');
+        panel.id = 'debugPanel';
+        panel.style.cssText = `
+            position:fixed; bottom:0; left:0; right:0; max-height:40vh;
+            background:rgba(0,0,0,0.88); color:#4aff9e;
+            font-family:monospace; font-size:11px; padding:8px 12px;
+            overflow-y:auto; z-index:999999; pointer-events:auto;
+            border-top:2px solid #4aff9e; line-height:1.5;
+        `;
+        document.body.appendChild(panel);
+    }
+    const line = document.createElement('div');
+    line.style.color = color;
+    line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+    panel.appendChild(line);
+    panel.scrollTop = panel.scrollHeight;
+    while (panel.children.length > 40) panel.removeChild(panel.firstChild);
+}
+
+// Wrap everything that could throw
+window.addEventListener('error', (e) => {
+    debugLog('WINDOW ERROR: ' + e.message + ' @ ' + e.filename + ':' + e.lineno, '#ff4444');
+});
+window.addEventListener('unhandledrejection', (e) => {
+    debugLog('PROMISE REJECT: ' + (e.reason?.message || e.reason), '#ff4444');
+});
+
+debugLog('game.js module loaded');
 
 const firebaseConfig = {
     apiKey: "AIzaSyC9jF-ocy6HjsVzWVVlAyXW-4aIFgA79-A",
@@ -30,7 +66,10 @@ try {
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
     db = getFirestore(app);
-} catch (e) { console.error('Firebase init:', e); }
+    debugLog('Firebase initialized OK');
+} catch (e) {
+    debugLog('Firebase init FAILED: ' + e.message, '#ff4444');
+}
 
 const MAP_HALF = 200;
 const PLAYER_RADIUS = 0.4;
@@ -105,7 +144,7 @@ const MELEE = {
 
 class Game {
     constructor() {
-        console.log('🎮 CODM-STYLE CITY WARZONE — Downtown City Edition');
+        debugLog('Game constructor starting');
 
         this.currentUser = null;
         this.playerId = null;
@@ -151,13 +190,19 @@ class Game {
 
         this.camera = new THREE.PerspectiveCamera(NORMAL_FOV, window.innerWidth / window.innerHeight, 0.1, 1500);
 
-        this.renderer = new THREE.WebGLRenderer({ antialias: true });
-        this.renderer.setSize(window.innerWidth, window.innerHeight);
-        this.renderer.shadowMap.enabled = true;
-        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-        this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        this.renderer.toneMappingExposure = 1.05;
+        try {
+            this.renderer = new THREE.WebGLRenderer({ antialias: true });
+            this.renderer.setSize(window.innerWidth, window.innerHeight);
+            this.renderer.shadowMap.enabled = true;
+            this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+            this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            this.renderer.toneMappingExposure = 1.05;
+            debugLog('Renderer created');
+        } catch (e) {
+            debugLog('RENDERER FAILED: ' + e.message, '#ff4444');
+            return;
+        }
 
         const cont = document.getElementById('gameContainer');
         if (cont) cont.appendChild(this.renderer.domElement);
@@ -209,14 +254,18 @@ class Game {
         this.sun = null;
         this._bootComplete = false;
 
+        debugLog('Setting up controls...');
         this.setupControls();
         this.setupMinimap();
         this.buildAnimMenu();
         this.injectSVGIcons();
-        this.setupAuthListener();   // ← login wired immediately, before boot
+
+        debugLog('Attaching auth listener...');
+        this.setupAuthListener();
 
         setInterval(() => this.updateCooldownUI(), 50);
 
+        debugLog('Starting boot()...');
         this.boot();
 
         this.animate();
@@ -228,35 +277,44 @@ class Game {
         });
 
         window.addEventListener('beforeunload', () => this.cleanup());
+
+        debugLog('Game constructor DONE');
     }
 
     // ================= BOOT / LOADING =================
     async boot() {
         const loadingEl = this.showLoadingScreen();
         try {
+            debugLog('Loading ' + MANIFEST.PRELOAD.length + ' city models...');
             this.loader.onProgress = (done, total, name) => {
                 this.updateLoadingScreen(loadingEl, done, total, name);
             };
 
             await this.loader.loadAll(MANIFEST.PRELOAD, 6);
+            debugLog('City models loaded: ' + this.loader.cache.size + ' success, ' + this.loader.failed.size + ' missing');
 
             setupSky(this.scene);
             const { sun } = setupLighting(this.scene);
             this.sun = sun;
+            debugLog('Lighting set up');
 
             this.city = new CityGenerator(this.scene, this.loader);
             this.city.build();
+            debugLog('City built: ' + this.city.buildings.length + ' buildings');
 
+            debugLog('Loading Soldier.glb + Rifle.glb...');
             await Promise.all([
-                this.loadGLB().catch(e => console.error('Soldier load failed:', e)),
-                this.loadGun().catch(e => console.warn('Gun load failed:', e.message))
+                this.loadGLB().catch(e => debugLog('Soldier FAILED: ' + e.message, '#ff4444')),
+                this.loadGun().catch(e => debugLog('Rifle FAILED: ' + e.message, '#ffaa00'))
             ]);
             this.createLocalPlayer();
+            debugLog('Player created');
 
             this._bootComplete = true;
             this.hideLoadingScreen(loadingEl);
+            debugLog('BOOT COMPLETE ✅');
         } catch (err) {
-            console.error('[boot] failed:', err);
+            debugLog('BOOT FAILED: ' + err.message, '#ff4444');
             this.hideLoadingScreen(loadingEl);
         }
     }
@@ -267,7 +325,7 @@ class Game {
             el = document.createElement('div');
             el.id = 'koLoading';
             el.style.cssText = `
-                position:fixed; inset:0; background:#0a0e1a; z-index:99999;
+                position:fixed; inset:0; background:#0a0e1a; z-index:99998;
                 display:flex; flex-direction:column; align-items:center; justify-content:center;
                 color:#4aff9e; font-family:Arial,sans-serif; gap:20px;
             `;
@@ -332,94 +390,62 @@ class Game {
     }
 
     bindLoginForm() {
-        if (this._loginBound) return;
+        if (this._loginBound) { debugLog('bindLoginForm skipped (already bound)'); return; }
         this._loginBound = true;
+        debugLog('bindLoginForm: attaching handlers');
 
-        const getErr = () => document.getElementById('loginError');
-        const setErr = (msg) => { const e = getErr(); if (e) e.textContent = msg; };
-        const setLoading = (on) => {
-            const b = document.getElementById('loginSubmitBtn');
-            if (!b) return;
-            b.classList.toggle('loading', on);
-            b.textContent = on ? 'LOGGING IN…' : 'LOG IN';
-        };
-
-        const doSignIn = () => {
+        const submit = () => {
             const email = (document.getElementById('loginEmail')?.value || '').trim();
             const pass = document.getElementById('loginPassword')?.value || '';
-            setErr('');
-            if (!email || !pass) { setErr('Enter email and password'); return; }
-            if (!auth) { setErr('Firebase not initialized'); return; }
+            const errBox = document.getElementById('loginError');
+            const btn = document.getElementById('loginSubmitBtn');
 
-            console.log('[login] signInWithEmailAndPassword:', email);
-            setLoading(true);
+            debugLog('LOGIN tapped: email="' + email + '" passLen=' + pass.length);
 
+            if (errBox) errBox.textContent = '';
+            if (!email || !pass) {
+                if (errBox) errBox.textContent = 'Enter email and password';
+                debugLog('Empty email or password', '#ffaa00');
+                return;
+            }
+            if (btn) btn.classList.add('loading');
+            if (!auth) {
+                debugLog('auth is null!', '#ff4444');
+                if (errBox) errBox.textContent = 'Firebase not initialized';
+                if (btn) btn.classList.remove('loading');
+                return;
+            }
+
+            debugLog('Calling signInWithEmailAndPassword...');
             signInWithEmailAndPassword(auth, email, pass)
                 .then((cred) => {
-                    console.log('[login] success:', cred.user.uid);
-                    setLoading(false);
+                    debugLog('LOGIN SUCCESS: ' + cred.user.uid);
+                    if (btn) btn.classList.remove('loading');
                     this.hideLoginScreen();
                 })
                 .catch((error) => {
-                    console.warn('[login] failed:', error.code, error.message);
-                    setLoading(false);
-                    setErr(this.friendlyAuthError(error));
-                });
-        };
-
-        const doSignUp = () => {
-            const email = (document.getElementById('loginEmail')?.value || '').trim();
-            const pass = document.getElementById('loginPassword')?.value || '';
-            setErr('');
-            if (!email || !pass) { setErr('Enter email and password'); return; }
-            if (pass.length < 6) { setErr('Password must be 6+ characters'); return; }
-            if (!auth) { setErr('Firebase not initialized'); return; }
-
-            console.log('[signup] createUserWithEmailAndPassword:', email);
-            setLoading(true);
-
-            createUserWithEmailAndPassword(auth, email, pass)
-                .then((cred) => {
-                    console.log('[signup] success:', cred.user.uid);
-                    setLoading(false);
-                    this.hideLoginScreen();
-                })
-                .catch((error) => {
-                    console.warn('[signup] failed:', error.code, error.message);
-                    setLoading(false);
-                    setErr(this.friendlyAuthError(error));
+                    debugLog('LOGIN ERROR: ' + error.code + ' — ' + error.message, '#ff4444');
+                    if (btn) btn.classList.remove('loading');
+                    if (errBox) errBox.textContent = this.friendlyAuthError(error);
                 });
         };
 
         const submitBtn = document.getElementById('loginSubmitBtn');
-        if (submitBtn) submitBtn.addEventListener('click', doSignIn);
-
-        // Inject a Sign Up button below the login button if it doesn't exist
-        if (!document.getElementById('loginSignupBtn')) {
-            const signupBtn = document.createElement('button');
-            signupBtn.id = 'loginSignupBtn';
-            signupBtn.type = 'button';
-            signupBtn.textContent = 'CREATE ACCOUNT';
-            signupBtn.style.cssText = `
-                width:100%; padding:12px; margin-top:10px;
-                background:transparent; border:1px solid #4aff9e; border-radius:12px;
-                color:#4aff9e; font-size:14px; font-weight:bold; letter-spacing:1.5px;
-                cursor:pointer;
-            `;
-            signupBtn.addEventListener('click', doSignUp);
-            const box = document.getElementById('loginBox');
-            const guest = document.getElementById('loginGuestBtn');
-            if (box && guest) box.insertBefore(signupBtn, guest);
-            else if (box) box.appendChild(signupBtn);
+        if (submitBtn) {
+            submitBtn.addEventListener('click', submit);
+            debugLog('Bound click handler to #loginSubmitBtn');
+        } else {
+            debugLog('#loginSubmitBtn NOT FOUND in DOM!', '#ff4444');
         }
 
         ['loginEmail', 'loginPassword'].forEach(id => {
             const el = document.getElementById(id);
-            if (el) el.addEventListener('keydown', (e) => { if (e.key === 'Enter') doSignIn(); });
+            if (el) el.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
         });
 
         const guestBtn = document.getElementById('loginGuestBtn');
         if (guestBtn) guestBtn.addEventListener('click', () => {
+            debugLog('Guest mode clicked');
             this.hideLoginScreen();
             this.showNotification('Guest mode: multiplayer disabled', 'info');
         });
@@ -427,12 +453,10 @@ class Game {
 
     friendlyAuthError(error) {
         const code = error.code || '';
-        if (code.includes('user-not-found')) return 'No account with that email. Tap CREATE ACCOUNT.';
+        if (code.includes('user-not-found')) return 'No account with that email.';
         if (code.includes('wrong-password')) return 'Wrong password.';
         if (code.includes('invalid-credential')) return 'Wrong email or password.';
         if (code.includes('invalid-email')) return 'Invalid email format.';
-        if (code.includes('email-already-in-use')) return 'That email already has an account. Tap LOG IN.';
-        if (code.includes('weak-password')) return 'Password too weak (min 6 chars).';
         if (code.includes('too-many-requests')) return 'Too many attempts. Try later.';
         if (code.includes('network-request-failed')) return 'No internet connection.';
         if (code.includes('operation-not-allowed')) return 'Enable Email/Password in Firebase console.';
@@ -450,12 +474,12 @@ class Game {
                         if (n.isMesh) { n.castShadow = true; n.receiveShadow = true; n.frustumCulled = false; }
                     });
                     gltf.animations.forEach(clip => { this.glbAnimations[clip.name] = clip; });
-                    console.log('✅ Soldier.glb loaded. Anims:', Object.keys(this.glbAnimations).length);
+                    debugLog('Soldier.glb OK (' + Object.keys(this.glbAnimations).length + ' anims)');
                     this.glbLoaded = true;
                     resolve();
                 },
                 undefined,
-                (err) => { console.error('Soldier.glb load failed:', err); reject(err); }
+                (err) => { debugLog('Soldier.glb load error: ' + (err?.message || err), '#ff4444'); reject(err); }
             );
         });
     }
@@ -498,12 +522,12 @@ class Game {
                     const center = finalBox.getCenter(new THREE.Vector3());
                     this.gunTemplate.position.sub(center);
 
-                    console.log('✅ Rifle.glb loaded');
+                    debugLog('Rifle.glb OK');
                     this.gunLoaded = true;
                     resolve();
                 },
                 undefined,
-                (err) => { console.warn('Rifle.glb not found or failed:', err.message); reject(err); }
+                (err) => { debugLog('Rifle.glb load error: ' + (err?.message || err), '#ffaa00'); reject(err); }
             );
         });
     }
@@ -533,7 +557,7 @@ class Game {
             })();
 
         if (handBone) {
-            if (!this.handBoneName) console.log('✅ Hand bone:', handBone.name);
+            if (!this.handBoneName) debugLog('Hand bone: ' + handBone.name);
             this.handBoneName = handBone.name;
 
             let gun;
@@ -580,11 +604,12 @@ class Game {
 
     createLocalPlayer() {
         const inst = this.createInstance();
-        if (!inst) return;
+        if (!inst) { debugLog('createLocalPlayer: no instance (glb not loaded)', '#ffaa00'); return; }
         this.localPlayer = inst;
         this.localPlayer.group.position.copy(this.playerPos);
         this.scene.add(this.localPlayer.group);
         this.playAnim(this.localPlayer, 'Idle_Gun');
+        debugLog('Local player added to scene');
     }
 
     playAnim(p, name, opts = {}) {
@@ -639,7 +664,10 @@ class Game {
     setupControls() {
         const swipeZone = document.getElementById('viewSwipeZone');
         const joy = document.getElementById('joystickContainer');
-        if (!joy || !swipeZone) return;
+        if (!joy || !swipeZone) {
+            debugLog('setupControls: joystick or swipeZone missing', '#ffaa00');
+            return;
+        }
 
         joy.addEventListener('touchstart', e => {
             e.preventDefault();
@@ -802,6 +830,7 @@ class Game {
 
     // ================= GAME FLOW =================
     startGame() {
+        debugLog('startGame called');
         this.gameActive = true;
         this.health = 100;
         this.score = 0;
@@ -1170,20 +1199,19 @@ class Game {
     // ================= AUTH LISTENER =================
     setupAuthListener() {
         if (!auth) {
-            console.warn('[auth] Firebase not initialized');
+            debugLog('auth is null — Firebase failed to init', '#ff4444');
             this.showLoginScreen();
             return;
         }
 
-        console.log('[auth] listener attached');
+        debugLog('Attaching onAuthStateChanged listener');
 
-        // Show login screen by default until we know whether a user exists.
         this.showLoginScreen();
 
         onAuthStateChanged(auth, (user) => {
             this.currentUser = user;
             if (user) {
-                console.log('[auth] signed in:', user.uid);
+                debugLog('AUTH: signed in as ' + user.uid);
                 this.playerId = user.uid;
                 try {
                     const p = localStorage.getItem('currentUserProfile');
@@ -1195,12 +1223,12 @@ class Game {
                 this.showNotification(`Welcome ${this.playerName}!`, 'success');
                 this.spawnInitialAmmoBoxes(40);
             } else {
-                console.log('[auth] no user — showing login');
+                debugLog('AUTH: no user, showing login');
                 this.firebaseReady = false;
                 this.showLoginScreen();
             }
         }, (e) => {
-            console.error('[auth] listener error:', e);
+            debugLog('AUTH listener ERROR: ' + e.message, '#ff4444');
             this.firebaseReady = false;
         });
     }
@@ -1256,7 +1284,12 @@ class Game {
                     }
                 });
             }, e => {});
-        } catch (e) { this.firebaseReady = false; }
+
+            debugLog('Firebase listeners attached');
+        } catch (e) {
+            debugLog('setupFirebase ERROR: ' + e.message, '#ff4444');
+            this.firebaseReady = false;
+        }
     }
 
     updateOrAddPlayer(data) {
@@ -1464,6 +1497,11 @@ class Game {
 }
 
 window.onload = () => {
-    try { window.game = new Game(); }
-    catch (e) { console.error('Game start failed:', e); }
+    try {
+        debugLog('window.onload — creating Game');
+        window.game = new Game();
+    } catch (e) {
+        debugLog('Game start FAILED: ' + e.message, '#ff4444');
+        console.error(e);
+    }
 };
