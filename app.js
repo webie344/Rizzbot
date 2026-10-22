@@ -29,8 +29,8 @@ const CONFIG = {
     appId: "1:60263975159:web:bd53dcaad86d6ed9592bf2"
 },
     cloudinary: {
-        cloudName: "YOUR_CLOUDINARY_CLOUD_NAME",
-        uploadPreset: "YOUR_UNSIGNED_UPLOAD_PRESET"
+        cloudName: "dtdqrh1b",
+        uploadPreset: "profile-pictures"
     },
     telegram: {
         botUsername: ""
