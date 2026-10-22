@@ -1,106 +1,933 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>REALISTIC GTA STYLE - FIXED</title>
-    <link rel="stylesheet" href="style.css">
-</head>
-
-<body>
-    <div id="rotateDevice">
-        <div class="icon">↻</div>
-        <h2>PLEASE ROTATE YOUR DEVICE</h2>
-        <p>Landscape mode required</p>
-    </div>
-
-    <div id="gameContainer"></div>
-
-    <div id="damageVignette"></div>
-
-    <div id="hudTopLeft">
-        <div id="healthBarWrap">
-            <div id="healthBarFill"></div>
-            <div id="healthText"><span id="healthValue">100</span></div>
-        </div>
-        <div id="scoreChip"><span class="chip-label">SCORE</span><span id="scoreValue">0</span></div>
-    </div>
-
-    <div id="hudTopRight">
-        <div id="killsChip"><span class="chip-label">KILLS</span><span id="killsValue">0</span></div>
-    </div>
-
-    <div id="minimap"><canvas id="minimapCanvas" width="200" height="200"></canvas></div>
-    <div id="crosshair"></div>
-
-    <div id="movementIndicator"><span>SPEED</span><span id="movementSpeed">0</span></div>
-    <div id="doorIndicator">🚪 TAP SHOOT TO ENTER</div>
-
-    <div id="joystickContainer"><div id="joystickBase"><div id="joystickThumb"></div></div></div>
-    <div id="viewSwipeZone"></div>
-
-    <div id="ammoCounter">
-        <span id="ammoValue">30</span><span id="ammoMax">/30</span>
-    </div>
-
-    <div id="quickActions">
-        <div class="action-btn small" id="punchBtn">🥊</div>
-        <div class="action-btn small" id="kickBtn">🦵</div>
-        <div class="action-btn small" id="rollBtn">🌀</div>
-        <div class="action-btn small" id="waveBtn">👋</div>
-    </div>
-
-    <div id="actionButtons">
-        <div class="action-btn" id="shootBtn">🔫</div>
-        <div class="action-btn" id="reloadBtn">🔄</div>
-        <div class="action-btn" id="zoomBtn">🔍</div>
-        <div class="action-btn" id="actionsBtn">⚡</div>
-    </div>
-
-    <div id="animMenu">
-        <div id="animMenuInner">
-            <div class="anim-menu-header">
-                <h3>ACTIONS</h3>
-                <div class="anim-menu-close" id="animMenuClose">✕</div>
-            </div>
-            <div id="animMenuGrid"></div>
-        </div>
-    </div>
-
-    <div id="gameOverlay"><div id="gameOverMenu"><h1>GAME OVER</h1><h2 id="finalScore">Score: 0</h2><button id="restartBtn">PLAY AGAIN</button></div></div>
-
-    <div id="instructions">
-        <h2>🎮 GTA STYLE REALISM 🎮</h2>
-        <button id="startBtn">START GAME</button>
-    </div>
-
-    <!-- ==================== LOGIN OVERLAY ==================== -->
-    <div id="loginOverlay">
-        <div id="loginBox">
-            <h2>LOG IN TO PLAY</h2>
-            <p class="login-sub">Sign in to fight other players</p>
-            <input type="email" id="loginEmail" placeholder="Email" autocomplete="email">
-            <input type="password" id="loginPassword" placeholder="Password" autocomplete="current-password">
-            <button id="loginSubmitBtn">LOG IN</button>
-            <button id="loginGuestBtn">Play as Guest</button>
-            <div id="loginError"></div>
-        </div>
-    </div>
-<!-- Sniper scope overlay -->
-<div id="scopeOverlay">
-    <div class="scope-ring"></div>
-    <div class="scope-crosshair-h"></div>
-    <div class="scope-crosshair-v"></div>
-</div>
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-            }
-        }
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+    <meta id="meta-theme-color" name="theme-color" content="#fafaf9" />
+    <meta name="description" content="One prompt. One photo. Once a day." />
+    <title>Drop — One prompt. One photo. Once a day.</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icons/drop-192.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./icons/drop-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- No-flash theme bootstrap: must run before <body> renders -->
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem("drop-theme"); // "light" | "dark" | "auto" | null
+          var mode = saved || "auto";
+          var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+          var resolved = mode === "auto" ? (prefersDark ? "dark" : "light") : mode;
+          document.documentElement.setAttribute("data-theme", resolved);
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute("content", resolved === "dark" ? "#0b0b0c" : "#fafaf9");
+        } catch (e) { /* ignore */ }
+      })();
     </script>
+</head>
+<body>
 
-    <script type="module" src="game.js"></script>
+<!-- ===== TOP HEADER (shown when logged in) ===== -->
+<header id="top-header" class="top-header" hidden>
+    <a href="#/" class="brand">Drop</a>
+    <div class="header-actions">
+        <button id="header-theme-btn" class="icon-btn theme-toggle" aria-label="Toggle dark mode" title="Toggle dark mode">
+            <svg class="theme-icon-sun" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+            <svg class="theme-icon-moon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+        <a href="#/notifications" class="icon-btn" id="header-notif-btn" aria-label="Notifications">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            <span id="nav-notif-badge" class="nav-badge corner-badge" hidden></span>
+        </a>
+        <button id="header-settings-btn" class="icon-btn" aria-label="Settings">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+    </div>
+</header>
+
+<!-- ===== APP CONTAINER ===== -->
+<main id="app-main">
+
+    <!-- ===== LOGIN ===== -->
+    <section id="view-login" class="view view-auth" hidden>
+        <div class="auth-container">
+            <h1 class="brand brand-large">Drop</h1>
+            <p class="muted center mb-lg">One prompt. One photo. Once a day.</p>
+            <form id="login-form" class="card">
+                <label for="login-email">Email</label>
+                <input id="login-email" type="email" autocomplete="email" required placeholder="you@example.com" />
+                <div class="row-between mt-sm">
+                    <label for="login-password">Password</label>
+                    <button type="button" id="forgot-btn" class="link-btn">Forgot?</button>
+                </div>
+                <input id="login-password" type="password" autocomplete="current-password" required minlength="6" />
+                <button type="submit" class="btn btn-primary btn-lg btn-block mt-md">Sign In</button>
+                <p id="login-error" class="error-text" hidden></p>
+            </form>
+            <p class="center mt-lg muted">Don't have an account? <a href="#/signup" class="link">Sign up</a></p>
+        </div>
+    </section>
+
+    <!-- ===== SIGNUP ===== -->
+    <section id="view-signup" class="view view-auth" hidden>
+        <div class="auth-container">
+            <h1 class="brand brand-large">Drop</h1>
+            <p class="muted center mb-lg">Real moments. No filters. One a day.</p>
+            <form id="signup-form" class="card">
+                <label for="signup-name">Display name</label>
+                <input id="signup-name" type="text" autocomplete="name" required maxlength="40" placeholder="What should we call you?" />
+                <label for="signup-email" class="mt-sm">Email</label>
+                <input id="signup-email" type="email" autocomplete="email" required placeholder="you@example.com" />
+                <label for="signup-password" class="mt-sm">Password</label>
+                <input id="signup-password" type="password" autocomplete="new-password" required minlength="6" placeholder="At least 6 characters" />
+                <label for="signup-invite" class="mt-sm">Invite code <span class="muted small">(optional)</span></label>
+                <input id="signup-invite" type="text" maxlength="10" placeholder="DROP-XXXX" autocapitalize="characters" autocomplete="off" />
+                <p class="hint">Got one from a friend? Both get a streak boost.</p>
+                <button type="submit" class="btn btn-primary btn-lg btn-block mt-md">Create Account</button>
+                <p id="signup-error" class="error-text" hidden></p>
+            </form>
+            <p class="center mt-lg muted">Already have an account? <a href="#/login" class="link">Sign in</a></p>
+        </div>
+    </section>
+
+    <!-- ===== ONBOARDING ===== -->
+    <section id="view-onboarding" class="view view-auth" hidden>
+        <div class="onboarding-container">
+            <div id="onboarding-slides" class="onboarding-slides">
+                <div class="onboarding-slide" data-slide="0">
+                    <div class="onboarding-illustration accent-bg">
+                        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                    </div>
+                    <h2 class="display">One prompt. Once a day.</h2>
+                    <p class="muted">A new prompt drops at the same time every day. You have a few minutes to capture it.</p>
+                </div>
+                <div class="onboarding-slide" data-slide="1" hidden>
+                    <div class="onboarding-illustration accent-bg">
+                        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                    </div>
+                    <h2 class="display">Real moments. No filters.</h2>
+                    <p class="muted">No edits. No staging. Just what's actually happening.</p>
+                </div>
+                <div class="onboarding-slide" data-slide="2" hidden>
+                    <div class="onboarding-illustration accent-bg">
+                        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    </div>
+                    <h2 class="display">Build your streak.</h2>
+                    <p class="muted">Pick a username and you're in.</p>
+                    <form id="onboarding-form" class="mt-lg" style="width:100%">
+                        <label for="onboarding-username">Username</label>
+                        <input id="onboarding-username" type="text" required maxlength="24" pattern="[a-zA-Z0-9_]+" placeholder="yourname" autocomplete="off" autocapitalize="off" />
+                        <p class="hint">Letters, numbers and underscores only.</p>
+                        <button type="submit" class="btn btn-primary btn-lg btn-block mt-md">Continue</button>
+                        <p id="onboarding-error" class="error-text" hidden></p>
+                    </form>
+                </div>
+            </div>
+            <div class="onboarding-dots" id="onboarding-dots">
+                <button class="dot active" data-dot="0" aria-label="Slide 1"></button>
+                <button class="dot" data-dot="1" aria-label="Slide 2"></button>
+                <button class="dot" data-dot="2" aria-label="Slide 3"></button>
+            </div>
+            <div id="onboarding-nav" class="onboarding-nav">
+                <button id="onboarding-back" class="btn btn-ghost" hidden>Back</button>
+                <button id="onboarding-next" class="btn btn-primary">Next</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== TODAY (HOME) ===== -->
+    <section id="view-today" class="view" hidden>
+        <div class="container">
+            <div class="streak-row">
+                <div class="streak-pill" id="today-streak">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67zM11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39 1.29.59 2.65.59 4.04 0 2.65-2.15 4.8-4.8 4.8z"/></svg>
+                    <span class="streak-num">0</span>
+                    <span class="streak-label">day streak</span>
+                </div>
+                <span class="muted small" id="today-date"></span>
+            </div>
+
+            <div class="prompt-card">
+                <span id="today-theme-pill" class="theme-pill" data-theme="freestyle" hidden>
+                    <span class="theme-emoji">✦</span><span class="theme-label">Freestyle</span>
+                </span>
+                <p class="overline">Today's prompt</p>
+                <h1 class="prompt-text" id="today-prompt-text">Loading…</h1>
+                <div class="countdown" id="today-countdown">
+                    <span class="countdown-label">Opens in</span>
+                    <span class="countdown-value">—</span>
+                </div>
+                <div id="today-live-counter" class="today-live-counter" hidden>
+                    <span class="live-dot"></span>
+                    <span class="live-text">0 friends have dropped today</span>
+                </div>
+            </div>
+
+            <div id="today-memories" class="memories-card" hidden>
+                <img id="today-memories-thumb" class="memories-thumb" alt="" />
+                <div class="memories-body">
+                    <p class="memories-title">On this day</p>
+                    <p id="today-memories-text" class="memories-text">—</p>
+                </div>
+            </div>
+
+            <div id="today-action" class="action-block">
+                <button id="today-snap-btn" class="btn btn-primary btn-xl btn-block" disabled>Capture</button>
+                <p id="today-action-hint" class="muted center small mt-sm"></p>
+            </div>
+
+            <div id="today-already-posted" class="already-posted" hidden>
+                <div class="check-circle">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <h3>You're in today</h3>
+                <p class="muted">Your drop is on the feed.</p>
+                <button class="btn btn-secondary btn-block mt-md" onclick="location.hash='#/feed'">View today's feed</button>
+            </div>
+
+            <div class="quick-tiles">
+                <button class="quick-tile" id="today-story-btn">
+                    <span class="qt-emoji">▶</span>
+                    <span class="qt-label">Today's story</span>
+                    <span class="qt-sub muted small">Auto-play all drops</span>
+                </button>
+                <a class="quick-tile" href="#/leaderboard">
+                    <span class="qt-emoji">🔥</span>
+                    <span class="qt-label">Leaderboard</span>
+                    <span class="qt-sub muted small">Streaks among friends</span>
+                </a>
+                <a class="quick-tile" href="#/circles">
+                    <span class="qt-emoji">○</span>
+                    <span class="qt-label">Circles</span>
+                    <span class="qt-sub muted small">Private group prompts</span>
+                </a>
+                <a class="quick-tile" href="#/prompts">
+                    <span class="qt-emoji">✦</span>
+                    <span class="qt-label">Prompts vote</span>
+                    <span class="qt-sub muted small">Pick tomorrow's prompt</span>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== FEED ===== -->
+    <section id="view-feed" class="view" hidden>
+        <div class="container">
+            <div class="feed-header">
+                <p class="overline">Today</p>
+                <h1 class="page-title" id="feed-prompt-text">—</h1>
+                <div class="tab-bar tab-bar-sm">
+                    <button class="tab-btn active" data-feed-tab="friends">Friends</button>
+                    <button class="tab-btn" data-feed-tab="all">Everyone</button>
+                </div>
+                <p class="muted small" id="feed-count">0 drops</p>
+            </div>
+
+            <div id="feed-spotlight" class="spotlight-banner" hidden>
+                <img id="feed-spotlight-thumb" class="spotlight-thumb" alt="" />
+                <div class="spotlight-body">
+                    <span class="spotlight-badge">Drop of the day</span>
+                    <p id="feed-spotlight-text" class="spotlight-text">—</p>
+                </div>
+            </div>
+
+            <div id="feed-empty" class="empty-state" hidden>
+                <div class="empty-illustration">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                </div>
+                <h3>No drops yet today</h3>
+                <p class="muted">Be the first when the prompt opens.</p>
+            </div>
+
+            <div id="feed-grid" class="feed-grid"></div>
+        </div>
+    </section>
+
+    <!-- ===== CAPTURE ===== -->
+    <section id="view-capture" class="view" hidden>
+        <div class="container">
+            <button class="link-btn back-btn" onclick="history.back()">← Back</button>
+            <p class="overline">Today's prompt</p>
+            <h2 class="prompt-text-small" id="capture-prompt-text">—</h2>
+
+            <div id="capture-picker" class="capture-picker">
+                <button id="capture-open-camera" type="button" class="capture-tile capture-camera-tile">
+                    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                    <span class="capture-label">Camera &amp; filters</span>
+                    <span class="capture-hint">Photo or video · 20+ face filters</span>
+                </button>
+                <input id="capture-camera" type="file" accept="image/*" capture="environment" hidden />
+
+                <label for="capture-library" class="capture-tile">
+                    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                    <span class="capture-label">From library</span>
+                    <span class="capture-hint">Up to 5 photos</span>
+                </label>
+                <input id="capture-library" type="file" accept="image/*" multiple hidden />
+            </div>
+
+            <section id="camera-studio" class="camera-studio" role="dialog" aria-modal="true" aria-label="Camera studio" hidden>
+                <div class="camera-stage">
+                    <video id="capture-camera-video" class="camera-source" autoplay muted playsinline></video>
+                    <canvas id="capture-camera-canvas" aria-label="Live camera preview"></canvas>
+                    <div class="camera-stage-bar">
+                        <button id="camera-close" type="button" class="camera-icon-btn" aria-label="Close camera">×</button>
+                        <span id="camera-face-status" class="camera-face-status">Starting camera…</span>
+                        <button id="camera-switch" type="button" class="camera-icon-btn" aria-label="Switch camera">↻</button>
+                    </div>
+                    <div id="camera-record-timer" class="camera-record-timer" hidden>● 00:00</div>
+                </div>
+                <div class="camera-studio-controls">
+                    <div class="camera-mode-toggle" role="group" aria-label="Capture mode">
+                        <button type="button" class="active" data-camera-mode="photo">Photo</button>
+                        <button type="button" data-camera-mode="video">Video</button>
+                    </div>
+                    <div id="camera-filter-list" class="camera-filter-list" aria-label="Face filters"></div>
+                    <div class="camera-shutter-row">
+                        <span class="camera-shutter-spacer" aria-hidden="true"></span>
+                        <button id="camera-shutter" type="button" class="camera-shutter" aria-label="Take photo">
+                            <span></span>
+                        </button>
+                        <span id="camera-shutter-label" class="camera-shutter-label">Take photo</span>
+                    </div>
+                    <p class="camera-privacy-note">Camera stays on this device until you choose Post.</p>
+                </div>
+            </section>
+
+            <div id="capture-preview-block" hidden>
+                <div id="capture-previews" class="capture-previews"></div>
+                <label for="capture-caption">Caption</label>
+                <textarea id="capture-caption" maxlength="240" rows="2" placeholder="Say something… use #hashtags"></textarea>
+                <p class="hint" id="capture-caption-count">0 / 240</p>
+
+                <label class="mt-md">With friends <span class="muted small">(optional)</span></label>
+                <div id="capture-with-block" class="with-block">
+                    <div id="capture-with-chips" class="with-chips"></div>
+                    <button type="button" id="capture-with-add" class="with-add-btn">+ Tag friends</button>
+                </div>
+                <div id="capture-with-picker" class="with-picker" hidden>
+                    <input id="capture-with-search" class="with-search" type="text" placeholder="Search friends…" />
+                    <div id="capture-with-results" class="with-results"></div>
+                    <button type="button" id="capture-with-done" class="btn btn-secondary btn-block mt-sm">Done</button>
+                </div>
+
+                <button id="capture-post-btn" class="btn btn-primary btn-xl btn-block mt-md">Post</button>
+                <button id="capture-retake-btn" class="btn btn-ghost btn-block mt-sm">Retake</button>
+                <p id="capture-error" class="error-text" hidden></p>
+            </div>
+
+            <div id="capture-uploading" class="uploading" hidden>
+                <div class="spinner"></div>
+                <p class="muted">Posting your drop…</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== PROFILE ===== -->
+    <section id="view-profile" class="view" hidden>
+        <div class="container">
+            <div class="profile-header">
+                <div class="avatar avatar-lg" id="profile-avatar">?</div>
+                <h1 class="page-title" id="profile-display-name">—</h1>
+                <p class="muted" id="profile-username">@—</p>
+            </div>
+
+            <div class="stats-row">
+                <div class="stat">
+                    <span class="stat-num" id="profile-current-streak">0</span>
+                    <span class="stat-label">Current</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-num" id="profile-longest-streak">0</span>
+                    <span class="stat-label">Longest</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-num" id="profile-total">0</span>
+                    <span class="stat-label">Drops</span>
+                </div>
+            </div>
+
+            <h3 class="section-title">Last 30 days</h3>
+            <div id="profile-grid" class="profile-grid"></div>
+            <div id="profile-empty" class="empty-state" hidden>
+                <p class="muted">No drops yet.</p>
+            </div>
+
+            <div id="profile-own-actions" class="profile-actions" hidden>
+                <button id="profile-recap-btn" class="btn btn-secondary btn-block">Weekly recap image</button>
+                <button class="btn btn-ghost btn-block mt-sm" onclick="location.hash='#/settings'">Settings</button>
+                <button id="profile-signout-btn" class="btn btn-ghost btn-block">Sign out</button>
+            </div>
+
+            <div id="profile-other-actions" class="profile-actions" hidden>
+                <button id="profile-friend-btn" class="btn btn-primary btn-block">Add friend</button>
+                <button id="profile-message-btn" class="btn btn-secondary btn-block mt-sm" hidden>Message</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== FRIENDS ===== -->
+    <section id="view-friends" class="view" hidden>
+        <div class="container">
+            <h1 class="page-title">Friends</h1>
+
+            <div class="tab-bar tab-bar-scroll">
+                <button class="tab-btn active" data-friends-tab="list">Friends <span id="friends-count-badge" class="badge-count" hidden>0</span></button>
+                <button class="tab-btn" data-friends-tab="requests">Requests <span id="friends-req-badge" class="badge-count" hidden>0</span></button>
+                <button class="tab-btn" data-friends-tab="find">Find</button>
+                <button class="tab-btn" data-friends-tab="leaderboard">Leaderboard</button>
+                <button class="tab-btn" data-friends-tab="circles">Circles</button>
+            </div>
+
+            <div id="friends-tab-list" class="friends-tab">
+                <div id="friends-list" class="friends-list"></div>
+                <div id="friends-empty" class="empty-state" hidden>
+                    <h3>No friends yet</h3>
+                    <p class="muted">Find people in the Find tab.</p>
+                </div>
+            </div>
+
+            <div id="friends-tab-requests" class="friends-tab" hidden>
+                <h3 class="section-title">Incoming</h3>
+                <div id="friends-requests-in" class="friends-list"></div>
+                <div id="friends-requests-in-empty" class="empty-state" hidden><p class="muted">No incoming requests.</p></div>
+                <h3 class="section-title mt-lg">Sent</h3>
+                <div id="friends-requests-out" class="friends-list"></div>
+                <div id="friends-requests-out-empty" class="empty-state" hidden><p class="muted">No sent requests.</p></div>
+            </div>
+
+            <div id="friends-tab-find" class="friends-tab" hidden>
+                <form id="friends-search-form" class="row-gap">
+                    <input id="friends-search-input" type="text" placeholder="Search by username" autocomplete="off" />
+                    <button type="submit" class="btn btn-primary">Search</button>
+                </form>
+                <div id="friends-search-result" class="friends-list mt-md"></div>
+                <p id="friends-search-status" class="muted center mt-md" hidden></p>
+            </div>
+
+            <div id="friends-tab-leaderboard" class="friends-tab" hidden>
+                <p class="muted small mb-md">Streaks among you and your friends. Past 7 days of drops shown.</p>
+                <div id="leaderboard-list" class="leaderboard-list"></div>
+                <div id="leaderboard-empty" class="empty-state" hidden><p class="muted">Add friends to see the leaderboard.</p></div>
+            </div>
+
+            <div id="friends-tab-circles" class="friends-tab" hidden>
+                <button id="circle-create-btn" class="btn btn-primary btn-block">+ New circle</button>
+                <p class="muted small mt-sm mb-md">Circles are private groups with their own daily prompt.</p>
+                <div id="circles-list" class="circles-list"></div>
+                <div id="circles-empty" class="empty-state" hidden><p class="muted">No circles yet. Create one to share private drops with a small group.</p></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== CIRCLE DETAIL ===== -->
+    <section id="view-circle" class="view" hidden>
+        <div class="container">
+            <button class="link-btn back-btn" onclick="history.back()">← Back</button>
+            <p class="overline" id="circle-detail-name">Circle</p>
+            <h1 class="page-title" id="circle-detail-prompt">—</h1>
+            <p class="muted small" id="circle-detail-meta">0 members</p>
+
+            <div class="setting-row mt-md">
+                <button id="circle-edit-prompt-btn" class="btn btn-ghost btn-sm">Set today's prompt</button>
+                <button id="circle-add-member-btn" class="btn btn-ghost btn-sm">Add member</button>
+                <button id="circle-leave-btn" class="btn btn-danger-ghost btn-sm">Leave</button>
+            </div>
+
+            <button id="circle-capture-btn" class="btn btn-primary btn-block mt-md">Capture for this circle</button>
+
+            <h3 class="section-title mt-lg">Today's drops</h3>
+            <div id="circle-feed" class="feed-grid"></div>
+            <div id="circle-feed-empty" class="empty-state" hidden><p class="muted">No drops in this circle yet today.</p></div>
+        </div>
+    </section>
+
+    <!-- ===== COMMUNITY PROMPTS VOTE ===== -->
+    <section id="view-prompts" class="view" hidden>
+        <div class="container">
+            <button class="link-btn back-btn" onclick="history.back()">← Back</button>
+            <h1 class="page-title">Tomorrow's prompt</h1>
+            <p class="muted small">Submit a prompt or vote on others. The top voted at midnight becomes tomorrow's prompt.</p>
+
+            <form id="prompt-submit-form" class="row-gap mt-md">
+                <input id="prompt-submit-input" type="text" maxlength="80" placeholder="Suggest a prompt…" autocomplete="off" required />
+                <button type="submit" class="btn btn-primary">Submit</button>
+            </form>
+
+            <div id="prompts-vote-list" class="prompts-vote-list mt-lg"></div>
+            <div id="prompts-vote-empty" class="empty-state" hidden><p class="muted">No suggestions yet. Be the first.</p></div>
+        </div>
+    </section>
+
+    <!-- ===== CHATS INBOX ===== -->
+    <section id="view-chats" class="view" hidden>
+        <div class="container">
+            <h1 class="page-title">Chats</h1>
+            <div id="chats-list" class="chats-list"></div>
+            <div id="chats-empty" class="empty-state" hidden>
+                <h3>No conversations yet</h3>
+                <p class="muted">Open a friend's profile and tap Message.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== CHAT THREAD ===== -->
+    <section id="view-thread" class="view" hidden>
+        <div class="thread-header">
+            <button class="link-btn back-btn icon-back" onclick="history.back()" aria-label="Back">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <div class="thread-header-info">
+                <div id="thread-avatar" class="thread-avatar">?</div>
+                <div>
+                    <h2 id="thread-title" class="thread-title">@—</h2>
+                    <p id="thread-subtitle" class="thread-subtitle">Active</p>
+                </div>
+            </div>
+            <a id="thread-profile-link" href="#/profile/" class="icon-btn" aria-label="View profile">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            </a>
+        </div>
+        <div id="thread-messages" class="thread-messages"></div>
+        <div id="thread-reply-preview" class="thread-reply-preview" hidden>
+            <div class="trp-body">
+                <span class="trp-name" id="trp-name">@user</span>
+                <span class="trp-text" id="trp-text">message</span>
+            </div>
+            <button type="button" id="trp-cancel" class="trp-cancel" aria-label="Cancel reply">×</button>
+        </div>
+        <form id="thread-form" class="thread-composer">
+            <label for="thread-image-input" class="composer-icon-btn" aria-label="Send image">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            </label>
+            <input id="thread-image-input" type="file" accept="image/*" hidden />
+            <button type="button" id="thread-voice-btn" class="composer-icon-btn" aria-label="Record voice note">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+            </button>
+            <input id="thread-input" type="text" placeholder="Message…" autocomplete="off" />
+            <button type="submit" class="composer-send-btn" aria-label="Send">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
+            </button>
+        </form>
+        <div id="thread-recording-bar" class="recording-bar" hidden>
+            <span class="rec-dot"></span>
+            <span class="rec-time" id="thread-rec-time">0:00</span>
+            <button type="button" id="thread-rec-cancel" class="btn btn-ghost btn-sm">Cancel</button>
+            <button type="button" id="thread-rec-send" class="btn btn-primary btn-sm">Send</button>
+        </div>
+    </section>
+
+    <!-- ===== POST DETAIL ===== -->
+    <section id="view-post" class="view" hidden>
+        <div class="container container-narrow">
+            <button class="link-btn back-btn" onclick="history.back()">← Back</button>
+            <div id="post-detail" class="post-detail"></div>
+        </div>
+    </section>
+
+    <!-- ===== HASHTAG ===== -->
+    <section id="view-hashtag" class="view" hidden>
+        <div class="container">
+            <button class="link-btn back-btn" onclick="history.back()">← Back</button>
+            <h1 id="hashtag-title" class="page-title">#—</h1>
+            <p id="hashtag-count" class="muted small">0 drops</p>
+            <div id="hashtag-feed" class="feed-grid mt-md"></div>
+            <div id="hashtag-empty" class="empty-state" hidden>
+                <p class="muted">No drops with this hashtag yet.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== NOTIFICATIONS ===== -->
+    <section id="view-notifications" class="view" hidden>
+        <div class="container container-narrow">
+            <button class="link-btn back-btn" onclick="history.back()">← Back</button>
+            <h1 class="page-title">Notifications</h1>
+            <div id="notifications-list" class="notifications-list"></div>
+            <div id="notifications-empty" class="empty-state" hidden>
+                <p class="muted">Nothing yet. When people view, like, or comment on your drops, you'll see it here.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== SHARE ===== -->
+    <section id="view-share" class="view" hidden>
+        <div class="container">
+            <button class="link-btn back-btn" onclick="history.back()">← Back</button>
+            <h1 class="page-title">Share your drop</h1>
+
+            <div id="share-card-wrap" class="share-card-wrap" hidden>
+                <div id="share-card" class="share-card">
+                    <img id="share-card-img" alt="" crossorigin="anonymous" />
+                    <div class="share-card-overlay">
+                        <p class="share-card-prompt" id="share-card-prompt">—</p>
+                        <p class="share-card-meta">
+                            <span id="share-card-username">@—</span>
+                            <span class="dot-sep">·</span>
+                            <span class="share-card-brand">Drop</span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <button id="share-download-btn" class="btn btn-primary btn-block mt-lg">Save image</button>
+            <button id="share-copy-btn" class="btn btn-secondary btn-block mt-sm">Copy link</button>
+        </div>
+    </section>
+
+    <!-- ===== SETTINGS ===== -->
+    <section id="view-settings" class="view" hidden>
+        <div class="container">
+            <button class="link-btn back-btn" onclick="history.back()">← Back</button>
+            <h1 class="page-title">Settings</h1>
+
+            <div class="setting-row">
+                <div>
+                    <h3>Prompt time</h3>
+                    <p class="muted small">Today's prompt opens at this local time.</p>
+                </div>
+                <input id="settings-time" type="time" />
+            </div>
+
+            <div class="setting-row">
+                <div>
+                    <h3>Push notifications</h3>
+                    <p class="muted small">Daily nudge when the prompt opens.</p>
+                </div>
+                <label class="switch">
+                    <input id="settings-push" type="checkbox" />
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <div class="setting-row">
+                <div>
+                    <h3>In-app sounds</h3>
+                    <p class="muted small">Subtle cues when you post, react, or get a message.</p>
+                </div>
+                <label class="switch">
+                    <input id="settings-sounds" type="checkbox" />
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <div class="setting-row" id="settings-telegram-row" hidden>
+                <div>
+                    <h3>Telegram notifications <span class="muted small">(optional)</span></h3>
+                    <p class="muted small" id="settings-telegram-status">Get drop alerts as Telegram messages — works on every phone.</p>
+                </div>
+                <button id="settings-telegram-btn" class="btn btn-ghost btn-sm" type="button">Connect</button>
+            </div>
+
+            <div class="setting-row">
+                <div>
+                    <h3>Appearance</h3>
+                    <p class="muted small">Choose light, dark, or follow your system.</p>
+                </div>
+                <div class="seg" id="settings-theme-seg" role="radiogroup" aria-label="Theme">
+                    <button type="button" class="seg-btn" data-theme-mode="light" role="radio" aria-checked="false">Light</button>
+                    <button type="button" class="seg-btn" data-theme-mode="dark" role="radio" aria-checked="false">Dark</button>
+                    <button type="button" class="seg-btn" data-theme-mode="auto" role="radio" aria-checked="true">Auto</button>
+                </div>
+            </div>
+
+            <button id="settings-save-btn" class="btn btn-primary btn-block mt-lg">Save changes</button>
+            <p id="settings-saved" class="muted center small mt-sm" hidden>Saved.</p>
+
+            <hr class="divider" />
+
+            <h3 class="section-title">Your invite code</h3>
+            <p class="muted small">Share this so friends get a streak boost when they sign up.</p>
+            <div class="invite-code-row">
+                <code id="settings-invite-code" class="invite-code">DROP-—</code>
+                <button id="settings-invite-copy" class="btn btn-ghost btn-sm">Copy</button>
+                <button id="settings-invite-share" class="btn btn-ghost btn-sm">Share link</button>
+            </div>
+            <p id="settings-invite-stats" class="muted small mt-sm">0 friends joined with your code.</p>
+
+            <hr class="divider" />
+
+            <button id="settings-signout-btn" class="btn btn-ghost btn-block">Sign out</button>
+            <button id="settings-delete-btn" class="btn btn-danger-ghost btn-block mt-sm">Delete account</button>
+        </div>
+    </section>
+
+</main>
+
+<!-- ===== BOTTOM NAV (shown when logged in) ===== -->
+<nav id="bottom-nav" class="bottom-nav" hidden>
+    <a href="#/" class="nav-item" data-route="today">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        <span>Today</span>
+    </a>
+    <a href="#/feed" class="nav-item" data-route="feed">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        <span>Feed</span>
+    </a>
+    <a href="#/friends" class="nav-item" data-route="friends">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span>Friends<span id="nav-friends-badge" class="nav-badge" hidden></span></span>
+    </a>
+    <a href="#/chats" class="nav-item" data-route="chats">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <span>Chats<span id="nav-chats-badge" class="nav-badge" hidden></span></span>
+    </a>
+    <a href="#/profile" class="nav-item" data-route="profile">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span>You</span>
+    </a>
+</nav>
+
+<!-- ===== TOAST CONTAINER ===== -->
+<div id="toast-container" class="toast-container" aria-live="polite"></div>
+<div id="ptr-indicator" class="ptr-indicator" aria-hidden="true"><div class="ptr-spinner"></div></div>
+<div id="friend-toast" class="friend-toast" hidden></div>
+
+<!-- ===== FULLSCREEN PHOTO DIALOG ===== -->
+<div id="photo-dialog" class="dialog" hidden>
+    <button class="dialog-close" id="photo-dialog-close" aria-label="Close">×</button>
+    <div class="dialog-content">
+        <img id="photo-dialog-img" alt="" />
+        <div class="dialog-meta">
+            <p class="overline" id="photo-dialog-prompt">—</p>
+            <p id="photo-dialog-username" class="dialog-username">@—</p>
+            <p id="photo-dialog-caption" class="dialog-caption"></p>
+            <div class="dialog-actions">
+                <button id="photo-dialog-like" class="like-btn">
+                    <span class="heart">♡</span>
+                    <span class="like-count">0</span>
+                </button>
+                <button id="photo-dialog-share" class="btn btn-ghost btn-sm">Share</button>
+            </div>
+
+            <div class="comments-section">
+                <h4 class="comments-title">Comments</h4>
+                <div id="photo-dialog-comments" class="comments-list"></div>
+                <p id="photo-dialog-comments-empty" class="muted small" hidden>Be the first to comment.</p>
+                <form id="photo-dialog-comment-form" class="comment-composer">
+                    <input id="photo-dialog-comment-input" type="text" placeholder="Add a comment…" autocomplete="off" maxlength="240" required />
+                    <button type="submit" class="btn btn-primary btn-sm">Post</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== STORY PLAYER ===== -->
+<div id="story-dialog" class="dialog story-dialog" hidden>
+    <div class="story-progress" id="story-progress"></div>
+    <button class="dialog-close story-close" id="story-close" aria-label="Close">×</button>
+    <div class="story-stage">
+        <button class="story-tap story-tap-left" id="story-prev" aria-label="Previous"></button>
+        <button class="story-tap story-tap-right" id="story-next" aria-label="Next"></button>
+        <img id="story-img" alt="" />
+        <div class="story-meta">
+            <p class="story-username" id="story-username">@—</p>
+            <p class="story-prompt" id="story-prompt">—</p>
+            <p class="story-caption" id="story-caption"></p>
+        </div>
+    </div>
+</div>
+
+<!-- ===== WEEKLY RECAP ===== -->
+<div id="recap-dialog" class="dialog" hidden>
+    <button class="dialog-close" id="recap-close" aria-label="Close">×</button>
+    <div class="dialog-content recap-content">
+        <h3>Your week in drops</h3>
+        <p class="muted small mb-md">Past 7 days · ready to share</p>
+        <div id="recap-canvas-wrap" class="recap-canvas-wrap">
+            <div id="recap-card" class="recap-card">
+                <div class="recap-header">
+                    <p class="recap-brand">Drop</p>
+                    <p class="recap-period" id="recap-period">—</p>
+                </div>
+                <div id="recap-grid" class="recap-grid"></div>
+                <div class="recap-footer">
+                    <span id="recap-username" class="recap-username">@—</span>
+                    <span id="recap-streak" class="recap-streak">🔥 0</span>
+                </div>
+            </div>
+        </div>
+        <button id="recap-save-btn" class="btn btn-primary btn-block mt-md">Save image</button>
+    </div>
+</div>
+
+<!-- ===== CIRCLE CREATE / EDIT ===== -->
+<div id="circle-dialog" class="dialog dialog-small" hidden>
+    <div class="dialog-content dialog-card">
+        <h3 id="circle-dialog-title">New circle</h3>
+        <label for="circle-dialog-name">Name</label>
+        <input id="circle-dialog-name" type="text" maxlength="40" placeholder="The crew" />
+        <label for="circle-dialog-prompt" class="mt-sm">Today's prompt for this circle</label>
+        <input id="circle-dialog-prompt" type="text" maxlength="80" placeholder="Show what you're up to right now" />
+        <div class="dialog-actions">
+            <button id="circle-dialog-cancel" class="btn btn-ghost">Cancel</button>
+            <button id="circle-dialog-save" class="btn btn-primary">Create</button>
+        </div>
+    </div>
+</div>
+
+<!-- ===== CIRCLE ADD MEMBER ===== -->
+<div id="circle-member-dialog" class="dialog dialog-small" hidden>
+    <div class="dialog-content dialog-card">
+        <h3>Add a friend</h3>
+        <p class="muted small">Pick from your friends list.</p>
+        <div id="circle-member-list" class="friends-list"></div>
+        <div class="dialog-actions">
+            <button id="circle-member-cancel" class="btn btn-ghost">Done</button>
+        </div>
+    </div>
+</div>
+
+<!-- ===== CONFIRM DIALOG ===== -->
+<div id="confirm-dialog" class="dialog dialog-small" hidden>
+    <div class="dialog-content dialog-card">
+        <h3 id="confirm-title">Are you sure?</h3>
+        <p id="confirm-message" class="muted"></p>
+        <div class="dialog-actions">
+            <button id="confirm-cancel" class="btn btn-ghost">Cancel</button>
+            <button id="confirm-ok" class="btn btn-danger">Confirm</button>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================
+     FEATURES (added) — chat customization, songs on drops,
+     reply drops, streak shields, monthly recap
+     ============================================================ -->
+
+<!-- Song picker dialog: opened from the capture flow when adding a song to a drop -->
+<div id="song-picker-dialog" class="dialog" hidden>
+    <button class="dialog-close" data-close-dialog="song-picker-dialog" aria-label="Close">&times;</button>
+    <div class="dialog-content song-picker">
+        <header class="dialog-header">
+            <h3>Add a song</h3>
+        </header>
+        <div class="song-picker-search">
+            <input id="song-search-input" type="search" placeholder="Search songs or moods…" autocomplete="off" />
+        </div>
+        <div class="song-picker-tabs">
+            <button class="song-tab active" data-mood="all">All</button>
+            <button class="song-tab" data-mood="chill">Chill</button>
+            <button class="song-tab" data-mood="happy">Happy</button>
+            <button class="song-tab" data-mood="moody">Moody</button>
+            <button class="song-tab" data-mood="energy">Energy</button>
+        </div>
+        <ul id="song-picker-list" class="song-picker-list"></ul>
+        <footer class="dialog-footer">
+            <button class="btn btn-ghost" id="song-picker-clear">Remove song</button>
+            <button class="btn btn-primary" id="song-picker-done">Done</button>
+        </footer>
+    </div>
+</div>
+
+<!-- Per-chat customization (theme color + wallpaper) -->
+<div id="chat-custom-dialog" class="dialog" hidden>
+    <button class="dialog-close" data-close-dialog="chat-custom-dialog" aria-label="Close">&times;</button>
+    <div class="dialog-content chat-custom">
+        <header class="dialog-header">
+            <h3>Customize this chat</h3>
+        </header>
+        <div class="dialog-body">
+            <section class="cc-section">
+                <h4>Bubble color</h4>
+                <div id="cc-color-grid" class="cc-color-grid"></div>
+            </section>
+            <section class="cc-section">
+                <h4>Wallpaper</h4>
+                <div id="cc-wallpaper-grid" class="cc-wallpaper-grid"></div>
+            </section>
+        </div>
+        <footer class="dialog-footer">
+            <button class="btn btn-ghost" id="cc-reset">Reset to default</button>
+            <button class="btn btn-primary" id="cc-save">Save</button>
+        </footer>
+    </div>
+</div>
+
+<!-- Monthly "Year-in-Drops" recap -->
+<div id="monthly-recap-dialog" class="dialog" hidden>
+    <button class="dialog-close" data-close-dialog="monthly-recap-dialog" aria-label="Close">&times;</button>
+    <div class="dialog-content recap-dialog">
+        <header class="dialog-header">
+            <h3 id="recap-title">Your month in drops</h3>
+        </header>
+        <div id="recap-stage" class="recap-stage">
+            <div class="recap-empty">Loading your drops…</div>
+        </div>
+        <footer class="dialog-footer">
+            <button class="btn btn-ghost" id="recap-month-prev">&larr; Prev month</button>
+            <button class="btn btn-primary" id="recap-save">Save image</button>
+            <button class="btn btn-ghost" id="recap-month-next">Next month &rarr;</button>
+        </footer>
+    </div>
+</div>
+
+<!-- ===== APP SCRIPT ===== -->
+<!-- ===== REPLY DROP COMPOSER ===== -->
+<div id="reply-drop-dialog" class="dialog" hidden>
+    <button class="dialog-close" data-close-dialog="reply-drop-dialog" aria-label="Close">&times;</button>
+    <div class="dialog-content reply-composer">
+        <header class="dialog-header">
+            <h3>Reply to <span id="reply-to-handle">@user</span></h3>
+        </header>
+        <div class="reply-composer-body dialog-body">
+            <div class="reply-parent-preview">
+                <img id="rp-thumb" class="rp-thumb" alt="" />
+                <div class="rp-meta">
+                    <p class="overline">In reply to</p>
+                    <p class="rp-handle" id="rp-handle">@user</p>
+                    <p class="rp-caption" id="rp-caption"></p>
+                    <p class="rp-caption" id="rp-prompt" style="font-style:italic;margin-top:2px;"></p>
+                </div>
+            </div>
+
+            <div id="reply-picker" class="capture-picker">
+                <label for="reply-camera" class="capture-tile">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                    <span class="capture-label">Take photo</span>
+                </label>
+                <input id="reply-camera" type="file" accept="image/*" capture="environment" hidden />
+
+                <label for="reply-library" class="capture-tile">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                    <span class="capture-label">From library</span>
+                </label>
+                <input id="reply-library" type="file" accept="image/*" hidden />
+            </div>
+
+            <div id="reply-preview-block" hidden>
+                <div id="reply-previews"></div>
+                <label for="reply-caption">Caption</label>
+                <textarea id="reply-caption" maxlength="240" rows="2" placeholder="Say something… use #hashtags"></textarea>
+                <p class="hint" id="reply-caption-count">0 / 240</p>
+                <button type="button" id="reply-retake-btn" class="btn btn-ghost btn-block">Choose another photo</button>
+            </div>
+        </div>
+        <footer class="dialog-footer">
+            <button class="btn btn-ghost" data-close-dialog="reply-drop-dialog">Cancel</button>
+            <button class="btn btn-primary" id="reply-post-btn" disabled>Post reply</button>
+        </footer>
+    </div>
+</div>
+
+<script type="module" src="app.js"></script>
+<script type="module" src="features.js"></script>
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js").catch((error) => {
+        console.warn("Offline install is unavailable:", error);
+      });
+    });
+  }
+</script>
+
 </body>
 </html>
