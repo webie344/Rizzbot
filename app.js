@@ -21,7 +21,7 @@
 
 const CONFIG = {
     firebase: {
-        apiKey: "AIzaSyC9jF-ocy6HjsVzWVVlAyXW-4aIFgA79-A",
+  apiKey: "AIzaSyC9jF-ocy6HjsVzWVVlAyXW-4aIFgA79-A",
     authDomain: "crypto-6517d.firebaseapp.com",
     projectId: "crypto-6517d",
     storageBucket: "crypto-6517d.firebasestorage.app",
@@ -29,7 +29,7 @@ const CONFIG = {
     appId: "1:60263975159:web:bd53dcaad86d6ed9592bf2"
 },
     cloudinary: {
-        cloudName: "dtdqrh1b",
+        cloudName: "ddtdqrh1b",
         uploadPreset: "profile-pictures"
     },
     telegram: {
@@ -1922,10 +1922,12 @@ async function uploadToCloudinary(file, resourceType = "image") {
         body: fd
     });
     if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Upload failed: ${text}`);
+        const payload = await res.json().catch(() => null);
+        const detail = payload?.error?.message || `HTTP ${res.status}`;
+        throw new Error(`Cloudinary ${resourceType} upload failed: ${detail}`);
     }
     const data = await res.json();
+    if (!data.secure_url) throw new Error(`Cloudinary ${resourceType} upload returned no media URL.`);
     return data.secure_url;
 }
 
@@ -2034,7 +2036,7 @@ async function handlePost() {
         console.error(err);
         $("#capture-uploading").hidden = true;
         $("#capture-preview-block").hidden = false;
-        errEl.textContent = "Upload failed. Check your Cloudinary settings and try again.";
+        errEl.textContent = (err?.message || "Upload failed. Check your Cloudinary settings and try again.").slice(0, 260);
         errEl.hidden = false;
     }
 }
