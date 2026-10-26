@@ -21,12 +21,12 @@
 
 const CONFIG = {
     firebase: {
-  apiKey: "AIzaSyC9jF-ocy6HjsVzWVVlAyXW-4aIFgA79-A",
-    authDomain: "crypto-6517d.firebaseapp.com",
-    projectId: "crypto-6517d",
-    storageBucket: "crypto-6517d.firebasestorage.app",
-    messagingSenderId: "60263975159",
-    appId: "1:60263975159:web:bd53dcaad86d6ed9592bf2"
+  apiKey: "AIzaSyAs4aNOMhcROcPFTAFHKKRYxBukg0rEHH0",
+  authDomain: "hm-blockchain.firebaseapp.com",
+  projectId: "hm-blockchain",
+  storageBucket: "hm-blockchain.firebasestorage.app",
+  messagingSenderId: "419063798189",
+  appId: "1:419063798189:web:9d0dc1096f39334d93e924"
 },
     cloudinary: {
         cloudName: "ddtdqrh1b",
